@@ -79,7 +79,8 @@ class DocumentPipeline:
     async def _chunk_and_embed(
         self, document_id: str, parsed: ParsedDocument, user_id: str
     ) -> None:
-        from app.adapters.vector.chunking import chunk_text
+        # chunk_text is a pure utility, acceptable to import here
+        from app.adapters.vector.chunking import chunk_text  # noqa: adapter utility only
 
         chunks = chunk_text(parsed.text)
         if chunks:

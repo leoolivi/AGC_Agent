@@ -61,8 +61,12 @@ class RiskEngine:
         return thresholds[field_name]
 
     def effective_threshold(
-        self, user_id: str, document_type: str, field_name: str
+        self, user_id: str, document_type: str, field_name: str, accuracy: float | None = None
     ) -> float:
-        """Phase 0-2: returns get_threshold(). Phase 3: adjusts by user trust."""
-        # [TODO: Phase 3] Lower threshold based on user_extraction_trust accuracy
-        return self.get_threshold(field_name)
+        """Adjust threshold based on user trust. Higher accuracy → lower threshold."""
+        base = self.get_threshold(field_name)
+        if accuracy is None or accuracy < 0.7:
+            return base
+        # Reduce threshold by up to 15% based on accuracy (0.7→0%, 1.0→15%)
+        reduction = (accuracy - 0.7) * 0.5  # max 0.15
+        return max(base - reduction, 0.5)  # never below 0.5

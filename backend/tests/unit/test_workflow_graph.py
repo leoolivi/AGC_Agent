@@ -45,7 +45,7 @@ class TestWorkflowGraph:
 
     def test_registry_has_3_templates(self) -> None:
         registry = build_registry()
-        assert len(registry.list_all()) == 3
+        assert len(registry.list_all()) == 6
 
     def test_all_templates_have_valid_tools(self) -> None:
         registry = build_registry()

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><style>
+body{font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#1a1a1a}
+h1{font-size:20px;color:#1e293b}
+h2{font-size:16px;margin-top:24px;padding-bottom:8px;border-bottom:1px solid #e2e8f0}
+.urgent{color:#dc2626} .warning{color:#d97706} .ok{color:#16a34a}
+.card{background:#f8fafc;border-radius:8px;padding:12px;margin:8px 0}
+.tip{background:#eff6ff;border-left:3px solid #3b82f6;padding:12px;margin-top:24px;border-radius:4px}
+.footer{margin-top:32px;font-size:12px;color:#64748b}
+</style></head>
+<body>
+<h1>☀️ Buongiorno! Il tuo riepilogo ACG</h1>
+
+<h2 class="urgent">⚠️ Attenzione immediata</h2>
+{% if immediate_items %}
+{% for item in immediate_items %}<div class="card">• {{ item }}</div>{% endfor %}
+{% else %}<p>Nessuna urgenza.</p>{% endif %}
+
+<h2 class="warning">📋 Da fare questa settimana</h2>
+{% if week_items %}
+{% for item in week_items %}<div class="card">• {{ item }}</div>{% endfor %}
+{% else %}<p>Nessuna scadenza questa settimana.</p>{% endif %}
+
+<h2>📁 Tutto il resto</h2>
+{% if rest_items %}
+{% for item in rest_items %}<div class="card">• {{ item }}</div>{% endfor %}
+{% else %}<p>Tutto in ordine.</p>{% endif %}
+
+<div class="tip">
+<strong>💡 Suggerimento del giorno</strong><br>
+{{ tip }}
+</div>
+
+<div class="footer">
+<p>Questo digest è generato automaticamente da ACG — Admin & Compliance Guardian.</p>
+<p>Puoi disattivarlo nelle <a href="{{ app_url }}/settings">impostazioni</a>.</p>
+</div>
+</body>
+</html>

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"
 
+    # LangSmith
+    langsmith_enabled: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = "acg-mvp"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

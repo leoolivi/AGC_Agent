@@ -25,7 +25,10 @@ DIGEST_TEMPLATE = """## Buongiorno! Ecco il tuo riepilogo.
 
 
 class DailyDigestService:
-    """Generates daily digest for users. Phase 2: template-based (no LLM)."""
+    """Generates daily digest for users. Phase 3: LLM-powered pattern detection."""
+
+    def __init__(self, llm=None) -> None:
+        self._llm = llm
 
     async def generate_for_user(self, user_id: str, situation: dict) -> dict:
         """Generate digest for a single user from collected situation data."""
@@ -84,3 +87,21 @@ class DailyDigestService:
         return DIGEST_TEMPLATE.format(
             immediate=immediate, this_week=this_week, rest=rest, tip=tip
         )
+
+    async def detect_patterns(self, situation: dict) -> str:
+        """Use LLM to detect anomalous patterns. Max 1 suggestion, max 200 tokens."""
+        if not self._llm:
+            return "Ricorda di controllare le fatture in scadenza questa settimana."
+        prompt = (
+            f"Analizza questa situazione aziendale e identifica UN pattern anomalo o suggerimento proattivo (max 200 token).\n"
+            f"Scadenze scadute: {situation.get('overdue_deadlines', [])}\n"
+            f"Scadenze urgenti: {situation.get('urgent_deadlines', [])}\n"
+            f"Conferme pendenti: {situation.get('pending_reviews', 0)}\n"
+            f"Inbox stale >48h: {situation.get('stale_inbox', 0)}\n"
+            f"Rispondi con UN solo suggerimento conciso in italiano."
+        )
+        try:
+            resp = await self._llm.generate(prompt, system="Sei un analista amministrativo.")
+            return resp.content.strip()[:200]
+        except Exception:
+            return "Ricorda di controllare le fatture in scadenza questa settimana."

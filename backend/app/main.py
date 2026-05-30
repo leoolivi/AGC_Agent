@@ -4,6 +4,15 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
+
+# LangSmith tracing
+if settings.langsmith_enabled and settings.langsmith_api_key:
+    import os
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+
 from app.api.v1.agent import router as agent_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.auth import router as auth_router
