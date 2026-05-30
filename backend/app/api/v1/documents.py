@@ -236,7 +236,6 @@ async def _run_pipeline(
 
     import structlog
 
-    from app.adapters.dummy.parser import DummyParserAdapter
     from app.adapters.dummy.vector import DummyVectorAdapter
     from app.agent.graphs.triage_graph import TriageGraph
     from app.api.deps import get_llm
@@ -248,11 +247,17 @@ async def _run_pipeline(
     logger = structlog.get_logger()
 
     llm = get_llm()
-    parser = DummyParserAdapter(
-        text=file_data[:2000].decode("utf-8", errors="replace"),
-        confidence=0.85,
-        supported_types=(content_type,),
-    )
+    # Use real parser based on content type
+    from app.adapters.parsers.pymupdf_parser import PyMuPDFParser
+
+    pdf_parser = PyMuPDFParser()
+    if pdf_parser.can_parse(content_type, filename):
+        parser = pdf_parser
+    else:
+        # Fallback for CSV/XLS
+        from app.adapters.parsers.pandas_adapter import PandasAdapter
+        parser = PandasAdapter()
+
     vector = DummyVectorAdapter()
     pipeline = DocumentPipeline(parser=parser, llm=llm, vector_store=vector)
 
