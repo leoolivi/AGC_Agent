@@ -1,0 +1,22 @@
+# Blacklisted actions — FORBIDDEN_MVP
+# These must be actively refused at runtime, never executed.
+blacklist:
+  - id: invio_ente_pubblico
+    description: "Invio diretto a enti pubblici (AdE, INPS, ecc.)"
+    keywords: ["invia a agenzia entrate", "invia a inps", "submit to tax authority"]
+    error_message: "Azione non consentita: l'invio diretto a enti pubblici non è supportato in questa versione."
+
+  - id: pagamento_diretto
+    description: "Esecuzione diretta di pagamenti"
+    keywords: ["esegui pagamento", "paga fattura", "execute payment", "bonifico automatico"]
+    error_message: "Azione non consentita: i pagamenti diretti non sono supportati."
+
+  - id: modifica_gestionale
+    description: "Modifica diretta di software gestionali esterni"
+    keywords: ["modifica gestionale", "aggiorna erp", "scrivi su sap"]
+    error_message: "Azione non consentita: la modifica di gestionali esterni non è supportata."
+
+  - id: consiglio_fiscale
+    description: "Consigli fiscali interpretativi"
+    keywords: ["interpreta la norma", "secondo la legge dovresti", "ti consiglio fiscalmente"]
+    error_message: "Non posso fornire consigli fiscali interpretativi. Consulta un commercialista."
