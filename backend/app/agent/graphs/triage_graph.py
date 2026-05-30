@@ -45,17 +45,27 @@ class TriageGraph:
 
     async def _analyze_event(self, event: dict, context: dict) -> str:
         """LLM analyzes event + context."""
+        payload = event.get("payload", {})
+        filename = event.get("filename", "documento")
+        doc_type = payload.get("document_type", "sconosciuto")
+        fields = payload.get("extracted_fields", {})
+
+        fields_summary = ", ".join(
+            f"{k}: {v.get('value', '?')}" for k, v in fields.items()
+            if isinstance(v, dict) and v.get("value") and v.get("confidence", 0) > 0.5
+        ) if fields else "nessun campo estratto"
+
         prompt = (
-            f"Analizza questo evento e il contesto. Produci un'analisi breve (max 200 caratteri) "
-            f"per l'utente.\n\nEvento: {json.dumps(event, default=str)}\n"
-            f"Contesto: {json.dumps(context, default=str)}"
+            f"Un documento è stato caricato. Scrivi un'analisi breve (max 160 caratteri) per l'utente.\n"
+            f"File: {filename}\nTipo: {doc_type}\nCampi estratti: {fields_summary}\n"
+            f"Rispondi SOLO con il testo dell'analisi, senza virgolette."
         )
         try:
-            resp = await self._llm.generate(prompt, system="Sei un assistente amministrativo.")
-            return resp.content[:200]
+            resp = await self._llm.generate(prompt, system="Sei un assistente amministrativo conciso. Rispondi in italiano.")
+            return resp.content.strip()[:200]
         except Exception as e:
             logger.warning("triage_analyze_failed", error=str(e))
-            return f"Nuovo documento caricato: {event.get('filename', 'documento')}"
+            return f"Nuovo documento caricato: {filename} (tipo: {doc_type})"
 
     async def _generate_options(self, event: dict, analysis: str) -> list[dict]:
         """Generate 2-3 suggested actions. Always includes 'Nessuna azione / Archivia'."""

@@ -21,7 +21,7 @@ Hai accesso ai documenti, scadenze e inbox dell'utente.
 Regole:
 - Rispondi SEMPRE in italiano
 - Sii conciso e diretto
-- Se l'utente chiede di fare un'azione (inviare sollecito, creare scadenza, ecc.), rispondi con JSON: {"action": "workflow_id", "args": {...}}
+- Se l'utente chiede di fare un'azione (inviare sollecito, creare scadenza, ecc.), rispondi con JSON: {{"action": "workflow_id", "args": {{...}}}}
 - Per tutto il resto, rispondi in modo conversazionale e utile
 - Se hai dati dell'utente nel contesto, usali per rispondere
 - Non inventare dati che non hai

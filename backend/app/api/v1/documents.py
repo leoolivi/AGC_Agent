@@ -275,7 +275,11 @@ async def _run_pipeline(
                 "user_id": user_id,
                 "document_id": document_id,
                 "filename": filename,
-                "payload": result.get("extracted_fields", {}),
+                "payload": {
+                    "document_type": result.get("document_type", "sconosciuto"),
+                    "confidence": result.get("document_type_confidence", 0),
+                    "extracted_fields": result.get("extracted_fields", {}),
+                },
             }
             inbox_item = await triage.run(event)
 
