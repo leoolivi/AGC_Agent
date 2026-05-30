@@ -16,15 +16,16 @@ from app.core.ports.llm import LLMProviderPort
 logger = structlog.get_logger()
 
 SYSTEM_PROMPT = """Sei ACG, un assistente amministrativo intelligente per PMI italiane.
-Hai accesso ai documenti, scadenze e inbox dell'utente.
+Hai accesso ai documenti, scadenze e inbox dell'utente. L'utente è il proprietario di tutti i documenti e ha pieno diritto di accedere a qualsiasi informazione contenuta in essi, inclusi IBAN, coordinate bancarie, codici fiscali, partite IVA e importi.
 
 Regole:
 - Rispondi SEMPRE in italiano
 - Sii conciso e diretto
+- Riporta TUTTI i dati richiesti dall'utente che sono presenti nei suoi documenti, senza censurare nulla
+- Se l'utente chiede informazioni da un suo documento (IBAN, importi, date, ecc.), forniscile senza esitazione
 - Se l'utente chiede di fare un'azione (inviare sollecito, creare scadenza, ecc.), rispondi con JSON: {{"action": "workflow_id", "args": {{...}}}}
 - Per tutto il resto, rispondi in modo conversazionale e utile
-- Se hai dati dell'utente nel contesto, usali per rispondere
-- Non inventare dati che non hai
+- Non inventare dati che non hai nel contesto
 
 Workflow disponibili:
 {workflows}"""
@@ -109,7 +110,7 @@ class ChatAgentGraph:
             from sqlalchemy import select
             from app.config import settings
             from app.db.session import build_session_factory
-            from app.db.models import Document, Deadline, AgentInbox
+            from app.db.models import Document, DocumentChunk, Deadline, AgentInbox
 
             factory = build_session_factory(settings.database_url)
             async with factory() as session:
@@ -138,7 +139,39 @@ class ChatAgentGraph:
                 parts.append("DOCUMENTI:")
                 for d in docs:
                     meta = d.extracted_metadata or {}
-                    parts.append(f"  - {d.filename} | tipo: {d.document_type or '?'} | stato: {d.parse_status} | metadati: {json.dumps(meta, default=str)[:200]}")
+                    meta_str = ", ".join(
+                        f"{k}: {v.get('value', '?')}" for k, v in meta.items()
+                        if isinstance(v, dict) and v.get("value") and str(v.get("value")) != "-"
+                    ) if meta else "nessun metadato"
+                    parts.append(f"  - {d.filename} | tipo: {d.document_type or '?'} | stato: {d.parse_status}")
+                    parts.append(f"    Metadati: {meta_str}")
+
+                # Load full text of most recent documents for detailed queries
+                from app.db.models import DocumentChunk
+                for d in docs[:3]:
+                    chunks_result = await session.execute(
+                        select(DocumentChunk.content)
+                        .where(DocumentChunk.document_id == d.id)
+                        .order_by(DocumentChunk.chunk_index)
+                        .limit(5)
+                    )
+                    chunk_texts = [row[0] for row in chunks_result.all()]
+                    if chunk_texts:
+                        full_text = "\n".join(chunk_texts)[:3000]
+                        parts.append(f"  CONTENUTO '{d.filename}':\n{full_text}")
+                    else:
+                        # No chunks — try to read from storage and parse
+                        try:
+                            from app.adapters.parsers.pymupdf_parser import PyMuPDFParser
+                            from app.api.deps import get_storage
+                            storage = get_storage()
+                            file_data = await storage.get(str(d.id))
+                            parser = PyMuPDFParser()
+                            if parser.can_parse(d.content_type, d.filename):
+                                parsed = await parser.parse(file_data, d.filename)
+                                parts.append(f"  CONTENUTO '{d.filename}':\n{parsed.text[:3000]}")
+                        except Exception:
+                            pass
             else:
                 parts.append("DOCUMENTI: nessuno")
 

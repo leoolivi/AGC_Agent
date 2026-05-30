@@ -35,11 +35,19 @@ class TestGuardrailLayer:
         assert result.allowed
 
     def test_output_fiscal_advice_blocked(self, guardrails: GuardrailLayer) -> None:
-        result = guardrails.check_output("Ti consiglio di pagare subito per evitare sanzioni")
+        result = guardrails.check_output("Secondo la mia interpretazione fiscale dovresti fare così")
         assert not result.allowed
 
     def test_output_normal_allowed(self, guardrails: GuardrailLayer) -> None:
         result = guardrails.check_output("La fattura #123 ha scadenza 15/06/2026.")
+        assert result.allowed
+
+    def test_output_helpful_phrase_allowed(self, guardrails: GuardrailLayer) -> None:
+        result = guardrails.check_output("Ti consiglio di controllare la scadenza")
+        assert result.allowed
+
+    def test_output_iban_allowed(self, guardrails: GuardrailLayer) -> None:
+        result = guardrails.check_output("L'IBAN è IT60X0542811101000000123456")
         assert result.allowed
 
     def test_pii_detection_cf(self, guardrails: GuardrailLayer) -> None:

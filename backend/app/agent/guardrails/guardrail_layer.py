@@ -69,9 +69,13 @@ class GuardrailLayer:
         return GuardrailResult(True)
 
     def check_output(self, text: str) -> GuardrailResult:
-        """Level 3: Validate output format, PII re-check."""
-        # Check for interpretive fiscal advice
-        fiscal_phrases = ["ti consiglio di", "dovresti pagare", "secondo la mia interpretazione fiscale"]
+        """Level 3: Block only explicit interpretive fiscal/legal advice."""
+        # Only block explicit interpretive fiscal advice (not generic helpful phrases)
+        fiscal_phrases = [
+            "secondo la mia interpretazione fiscale",
+            "come commercialista ti suggerisco",
+            "la legge prevede che tu debba",
+        ]
         for phrase in fiscal_phrases:
             if phrase.lower() in text.lower():
                 logger.warning("guardrail_block", level="output", reason="fiscal_advice")
