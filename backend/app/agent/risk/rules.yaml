@@ -1,0 +1,29 @@
+# RiskEngine rules — ACG MVP
+# Risk scores: 0 (read-only) to 5 (max, never auto-executed)
+
+tool_risk_base:
+  read_document: 0
+  search_documents: 0
+  classify_document: 1
+  extract_fields: 1
+  create_deadline: 2
+  send_notification: 2
+  draft_email: 2
+  send_email: 4
+  delete_document: 4
+  create_calendar_event: 3
+  batch_send_reminders: 5
+
+context_modifiers:
+  involves_external_party: 1
+  involves_monetary_amount: 1
+  involves_legal_deadline: 1
+  involves_pii: 1
+  high_value_amount: 2
+  irreversible_action: 1
+
+confidence_thresholds:
+  field_extraction: 0.85
+  deadline_extraction: 0.90
+  amount_extraction: 0.92
+  document_classification: 0.80
