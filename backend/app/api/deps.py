@@ -78,7 +78,11 @@ def get_storage() -> FileStoragePort:
 def get_llm() -> LLMProviderPort:
     """Build LLM adapter based on LLM_PROVIDER env var."""
     provider = settings.llm_provider
-    if provider == "ollama":
+    if provider == "openrouter" and settings.openrouter_api_key:
+        from app.adapters.llm.openrouter_adapter import OpenRouterAdapter
+
+        return OpenRouterAdapter(api_key=settings.openrouter_api_key, model=settings.openrouter_model)
+    elif provider == "ollama":
         from app.adapters.llm.ollama_adapter import OllamaAdapter
 
         return OllamaAdapter(model=settings.ollama_model, base_url=settings.ollama_base_url)
