@@ -9,10 +9,14 @@ from app.core.ports.llm import LLMProviderPort, LLMResponse
 
 
 class OpenRouterAdapter(LLMProviderPort):
-    def __init__(self, api_key: str, model: str = "google/gemini-flash-1.5") -> None:
+    def __init__(self, api_key: str, model: str = "openai/gpt-oss-120b") -> None:
         self._client = openai.AsyncOpenAI(
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "ACG Admin Compliance Guardian",
+            },
         )
         self._model = model
 

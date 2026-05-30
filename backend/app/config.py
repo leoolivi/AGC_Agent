@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     google_api_key: str = ""
     openrouter_api_key: str = ""
-    openrouter_model: str = "google/gemini-flash-1.5"
+    openrouter_model: str = "openai/gpt-oss-120b"
     llm_timeout: int = 45
     ollama_model: str = "llama3.1"
     ollama_base_url: str = "http://localhost:11434/v1"
