@@ -1,4 +1,4 @@
-sen# ACG — Docker Compose (development)
+# ACG — Docker Compose (development)
 services:
   postgres:
     image: pgvector/pgvector:pg16

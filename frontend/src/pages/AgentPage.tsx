@@ -1,5 +1,4 @@
-import { useState, type FormEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,29 +15,45 @@ interface Message {
 export function AgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const sendMessage = useMutation({
-    mutationFn: async (message: string) => {
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const msg = input.trim();
+    if (!msg || loading) return;
+
+    setMessages((prev) => [...prev, { role: "user", content: msg }]);
+    setInput("");
+    setLoading(true);
+
+    try {
       const res = await api.post<{ response: string; workflow_id: string | null; blocked: boolean }>(
         "/api/v1/agent/query",
-        { message }
+        { message: msg }
       );
-      return res.data;
-    },
-    onSuccess: (data) => {
       setMessages((prev) => [
         ...prev,
-        { role: "agent", content: data.response, workflow_id: data.workflow_id, blocked: data.blocked },
+        {
+          role: "agent",
+          content: res.data.response,
+          workflow_id: res.data.workflow_id,
+          blocked: res.data.blocked,
+        },
       ]);
-    },
-  });
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
-    setMessages((prev) => [...prev, { role: "user", content: input }]);
-    sendMessage.mutate(input);
-    setInput("");
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Errore di connessione";
+      setMessages((prev) => [
+        ...prev,
+        { role: "agent", content: `Errore: ${errorMsg}. Riprova.`, blocked: false },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -57,13 +72,18 @@ export function AgentPage() {
                 {msg.workflow_id && <Badge variant="secondary">{msg.workflow_id}</Badge>}
                 {msg.blocked && <Badge className="bg-destructive text-white">Bloccato</Badge>}
               </div>
-              <p className="text-sm">{msg.content}</p>
+              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
             </CardContent>
           </Card>
         ))}
-        {sendMessage.isPending && (
-          <p className="text-sm text-muted-foreground">Elaborazione...</p>
+        {loading && (
+          <Card className="mr-12">
+            <CardContent className="p-3">
+              <p className="text-sm text-muted-foreground animate-pulse">ACG sta pensando...</p>
+            </CardContent>
+          </Card>
         )}
+        <div ref={bottomRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -72,8 +92,9 @@ export function AgentPage() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Scrivi un messaggio..."
           className="flex-1"
+          disabled={loading}
         />
-        <Button type="submit" disabled={sendMessage.isPending}>Invia</Button>
+        <Button type="submit" disabled={loading}>Invia</Button>
       </form>
     </div>
   );
