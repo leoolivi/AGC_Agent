@@ -76,7 +76,7 @@ async def callback(code: str, state: str) -> RedirectResponse:
     user_id = pending["user_id"]
     flow = _build_flow()
     flow.code_verifier = pending.get("code_verifier")
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, code_verifier=pending.get("code_verifier"))
     credentials = flow.credentials
 
     if not credentials.refresh_token:
