@@ -1,0 +1,169 @@
+"""Atomic tools — each tool does ONE thing with a REAL effect in the DB.
+
+The agent composes these dynamically based on the user's request.
+Every tool returns a result dict and has observable side effects in the app.
+"""
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime, timezone
+
+import structlog
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.db.models import Deadline, Document, EmailDraft, Notification
+from app.db.session import build_session_factory
+
+logger = structlog.get_logger()
+
+
+async def _get_session() -> AsyncSession:
+    factory = build_session_factory(settings.database_url)
+    return factory()
+
+
+# ─── Tool definitions (for the LLM prompt) ───
+
+TOOL_DEFINITIONS = """
+STRUMENTI DISPONIBILI (usa ESATTAMENTE questo formato, uno per riga):
+
+1. TOOL: crea_scadenza | titolo | data_YYYY-MM-DD
+   Effetto: crea una scadenza visibile nella pagina Scadenze
+   Esempio: TOOL: crea_scadenza | Pagamento fattura Mario Tech | 2026-06-15
+
+2. TOOL: crea_bozza_email | destinatario | oggetto | corpo_email
+   Effetto: crea una bozza email visibile nella pagina Email
+   Esempio: TOOL: crea_bozza_email | info@mariotech.it | Sollecito fattura INV-2026-047 | Gentile Mario Tech, vi ricordiamo che la fattura...
+
+3. TOOL: crea_notifica | titolo | messaggio | livello(info/warning/urgent)
+   Effetto: crea una notifica visibile nella campanella
+   Esempio: TOOL: crea_notifica | Scadenza imminente | La fattura scade tra 3 giorni | warning
+
+4. TOOL: cerca_documenti | query
+   Effetto: nessuno (solo lettura), restituisce risultati di ricerca
+   Esempio: TOOL: cerca_documenti | fatture mario tech
+
+REGOLE:
+- Puoi usare PIÙ tool nella stessa risposta (uno per riga)
+- Rispondi PRIMA all'utente in modo conversazionale, POI aggiungi i TOOL: alla fine
+- Usa i tool SOLO quando l'utente chiede di FARE qualcosa (non per domande informative)
+- I dati che inserisci nei tool devono venire DAL CONTESTO, non inventati
+"""
+
+
+# ─── Tool executors ───
+
+async def execute_tool(tool_line: str, user_id: str) -> str | None:
+    """Parse and execute a single TOOL: line. Returns human-readable result."""
+    try:
+        raw = tool_line.replace("TOOL:", "").strip()
+        parts = [p.strip() for p in raw.split("|")]
+        tool_name = parts[0]
+
+        if tool_name == "crea_scadenza":
+            return await _create_deadline(user_id, parts)
+        elif tool_name == "crea_bozza_email":
+            return await _create_email_draft(user_id, parts)
+        elif tool_name == "crea_notifica":
+            return await _create_notification(user_id, parts)
+        elif tool_name == "cerca_documenti":
+            return await _search_documents(user_id, parts)
+        else:
+            return f"Tool sconosciuto: {tool_name}"
+    except Exception as e:
+        logger.error("tool_execution_error", error=str(e), tool_line=tool_line)
+        return f"Errore: {e}"
+
+
+async def _create_deadline(user_id: str, parts: list[str]) -> str:
+    """Create a real deadline in the DB."""
+    title = parts[1] if len(parts) > 1 else "Scadenza senza titolo"
+    due_str = parts[2] if len(parts) > 2 else ""
+
+    try:
+        due = date.fromisoformat(due_str)
+    except ValueError:
+        return f"Data non valida: '{due_str}'. Formato richiesto: YYYY-MM-DD"
+
+    async with await _get_session() as session:
+        dl = Deadline(
+            user_id=uuid.UUID(user_id),
+            title=title,
+            due_date=due,
+            deadline_type="custom",
+            source="ai_agent",
+            status="active",
+        )
+        session.add(dl)
+        await session.commit()
+
+    logger.info("tool_deadline_created", title=title, due_date=due_str)
+    return f"📅 Scadenza creata: **{title}** → {due_str}"
+
+
+async def _create_email_draft(user_id: str, parts: list[str]) -> str:
+    """Create a real email draft in the DB."""
+    to = parts[1] if len(parts) > 1 else ""
+    subject = parts[2] if len(parts) > 2 else "Senza oggetto"
+    body = parts[3] if len(parts) > 3 else ""
+
+    if not to:
+        return "Destinatario mancante per la bozza email"
+
+    async with await _get_session() as session:
+        draft = EmailDraft(
+            user_id=uuid.UUID(user_id),
+            to_addresses=[to],
+            subject=subject,
+            body_html=f"<p>{body.replace(chr(10), '<br>')}</p>",
+            body_text=body,
+            status="pending_review",
+        )
+        session.add(draft)
+        await session.commit()
+
+    logger.info("tool_email_draft_created", to=to, subject=subject)
+    return f"✉️ Bozza email creata: **{subject}** → {to} (visibile in Email)"
+
+
+async def _create_notification(user_id: str, parts: list[str]) -> str:
+    """Create a real notification in the DB."""
+    title = parts[1] if len(parts) > 1 else "Notifica"
+    body = parts[2] if len(parts) > 2 else ""
+    level = parts[3] if len(parts) > 3 else "info"
+
+    if level not in ("info", "warning", "urgent", "action"):
+        level = "info"
+
+    async with await _get_session() as session:
+        notif = Notification(
+            user_id=uuid.UUID(user_id),
+            title=title,
+            body=body,
+            level=level,
+        )
+        session.add(notif)
+        await session.commit()
+
+    logger.info("tool_notification_created", title=title, level=level)
+    return f"🔔 Notifica creata: **{title}** [{level}]"
+
+
+async def _search_documents(user_id: str, parts: list[str]) -> str:
+    """Search documents by filename/type."""
+    query = parts[1] if len(parts) > 1 else ""
+
+    async with await _get_session() as session:
+        result = await session.execute(
+            select(Document.filename, Document.document_type, Document.id)
+            .where(Document.user_id == uuid.UUID(user_id))
+            .where(Document.filename.ilike(f"%{query}%") | Document.document_type.ilike(f"%{query}%"))
+            .limit(5)
+        )
+        docs = result.all()
+
+    if not docs:
+        return f"Nessun documento trovato per '{query}'"
+    return "Documenti trovati: " + ", ".join(f"{d[0]} ({d[1] or '?'})" for d in docs)

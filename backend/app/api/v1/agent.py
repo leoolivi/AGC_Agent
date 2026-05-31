@@ -33,12 +33,11 @@ async def agent_query(
     from app.api.deps import get_llm
     from app.agent.graphs.chat_agent import ChatAgentGraph
     from app.agent.guardrails.guardrail_layer import GuardrailLayer
-    from app.agent.workflows.templates import build_registry
 
     session_id = body.session_id or str(uuid.uuid4())
     llm = get_llm()
 
-    graph = ChatAgentGraph(llm=llm, registry=build_registry(), guardrails=GuardrailLayer())
+    graph = ChatAgentGraph(llm=llm, guardrails=GuardrailLayer())
     result = await graph.handle_message(body.message, user["sub"], session_id)
 
     return QueryResponse(
