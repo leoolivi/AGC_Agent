@@ -39,4 +39,24 @@
     @apply bg-background text-foreground;
     font-family: system-ui, -apple-system, sans-serif;
   }
+  .prose table {
+    @apply w-full text-xs border-collapse;
+  }
+  .prose th, .prose td {
+    @apply border border-border px-2 py-1 text-left;
+  }
+  .prose th {
+    @apply bg-muted font-medium;
+  }
+  .prose ul, .prose ol {
+    @apply pl-4;
+  }
+  .prose h1, .prose h2, .prose h3 {
+    @apply font-semibold mt-3 mb-1;
+  }
+  .prose h1 { @apply text-base; }
+  .prose h2 { @apply text-sm; }
+  .prose h3 { @apply text-sm; }
+  .prose p { @apply my-1; }
+  .prose hr { @apply my-3 border-border; }
 }

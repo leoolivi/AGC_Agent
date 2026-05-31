@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   role: "user" | "agent";
@@ -72,7 +74,9 @@ export function AgentPage() {
                 {msg.workflow_id && <Badge variant="secondary">{msg.workflow_id}</Badge>}
                 {msg.blocked && <Badge className="bg-destructive text-white">Bloccato</Badge>}
               </div>
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              <div className="text-sm prose prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              </div>
             </CardContent>
           </Card>
         ))}
