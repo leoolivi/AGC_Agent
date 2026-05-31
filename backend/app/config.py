@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     langsmith_api_key: str = ""
     langsmith_project: str = "acg-mvp"
 
+    # Google Suite
+    google_enabled: bool = False
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/v1/oauth/google/callback"
+    google_token_encryption_key: str = ""
+    google_drive_watch_folder_id: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

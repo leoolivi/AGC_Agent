@@ -231,6 +231,17 @@ class ChatMessage(Base):
     __table_args__ = (Index("ix_chat_messages_session_id", "session_id"),)
 
 
+class GoogleOAuthToken(Base):
+    __tablename__ = "google_oauth_tokens"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(50), primary_key=True, default="google")
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[list] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class UserExtractionTrust(Base):
     __tablename__ = "user_extraction_trust"
 

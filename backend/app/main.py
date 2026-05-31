@@ -24,6 +24,7 @@ from app.api.v1.documents import router as documents_router
 from app.api.v1.email_drafts import router as email_drafts_router
 from app.api.v1.inbox import router as inbox_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.oauth_google import router as oauth_google_router
 from app.api.v1.settings import router as settings_router
 
 app = FastAPI(title="ACG — Admin & Compliance Guardian", version="0.1.0")
@@ -48,6 +49,7 @@ app.include_router(agent_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
+app.include_router(oauth_google_router, prefix="/api/v1")
 
 
 @app.get("/health")

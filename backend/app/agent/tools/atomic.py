@@ -30,7 +30,7 @@ TOOL_DEFINITIONS = """
 STRUMENTI DISPONIBILI (usa ESATTAMENTE questo formato, uno per riga):
 
 1. TOOL: crea_scadenza | titolo | data_YYYY-MM-DD
-   Effetto: crea una scadenza visibile nella pagina Scadenze
+   Effetto: crea una scadenza visibile nella pagina Scadenze (+ evento Google Calendar se collegato)
    Esempio: TOOL: crea_scadenza | Pagamento fattura Mario Tech | 2026-06-15
 
 2. TOOL: crea_bozza_email | destinatario | oggetto | corpo_email
@@ -44,6 +44,14 @@ STRUMENTI DISPONIBILI (usa ESATTAMENTE questo formato, uno per riga):
 4. TOOL: cerca_documenti | query
    Effetto: nessuno (solo lettura), restituisce risultati di ricerca
    Esempio: TOOL: cerca_documenti | fatture mario tech
+
+5. TOOL: leggi_email | query_opzionale
+   Effetto: legge le ultime email dall'inbox Gmail dell'utente (richiede Google collegato)
+   Esempio: TOOL: leggi_email | fattura
+
+6. TOOL: importa_da_drive | nome_file_o_query
+   Effetto: importa un file da Google Drive nel sistema (richiede Google collegato)
+   Esempio: TOOL: importa_da_drive | contratto 2026
 
 REGOLE:
 - Puoi usare PIÙ tool nella stessa risposta (uno per riga)
@@ -70,6 +78,10 @@ async def execute_tool(tool_line: str, user_id: str) -> str | None:
             return await _create_notification(user_id, parts)
         elif tool_name == "cerca_documenti":
             return await _search_documents(user_id, parts)
+        elif tool_name == "leggi_email":
+            return await _read_gmail(user_id, parts)
+        elif tool_name == "importa_da_drive":
+            return await _import_from_drive(user_id, parts)
         else:
             return f"Tool sconosciuto: {tool_name}"
     except Exception as e:
@@ -78,7 +90,7 @@ async def execute_tool(tool_line: str, user_id: str) -> str | None:
 
 
 async def _create_deadline(user_id: str, parts: list[str]) -> str:
-    """Create a real deadline in the DB."""
+    """Create a real deadline in the DB. Also creates Calendar event if Google connected."""
     title = parts[1] if len(parts) > 1 else "Scadenza senza titolo"
     due_str = parts[2] if len(parts) > 2 else ""
 
@@ -99,8 +111,23 @@ async def _create_deadline(user_id: str, parts: list[str]) -> str:
         session.add(dl)
         await session.commit()
 
+    # Try to create Google Calendar event
+    calendar_note = ""
+    try:
+        from app.adapters.google import GoogleTokenStore
+        store = GoogleTokenStore()
+        if await store.has_valid_token(user_id, "google", "https://www.googleapis.com/auth/calendar.events"):
+            from app.adapters.google.calendar_adapter import GoogleCalendarRealAdapter
+            from app.core.ports.calendar import CalendarEvent
+            cal = GoogleCalendarRealAdapter()
+            event = CalendarEvent(title=title, due_datetime=datetime.combine(due, datetime.min.time()), description=f"Scadenza ACG: {title}")
+            await cal.create_event(event, user_id)
+            calendar_note = " + 📆 evento Google Calendar"
+    except Exception:
+        pass
+
     logger.info("tool_deadline_created", title=title, due_date=due_str)
-    return f"📅 Scadenza creata: **{title}** → {due_str}"
+    return f"📅 Scadenza creata: **{title}** → {due_str}{calendar_note}"
 
 
 async def _create_email_draft(user_id: str, parts: list[str]) -> str:
@@ -179,3 +206,49 @@ async def _search_documents(user_id: str, parts: list[str]) -> str:
     if not docs:
         return f"Nessun documento trovato per '{query}'"
     return "Documenti trovati: " + ", ".join(f"{d[0]} ({d[1] or '?'})" for d in docs)
+
+
+async def _read_gmail(user_id: str, parts: list[str]) -> str:
+    """Read recent emails from Gmail."""
+    query = parts[1] if len(parts) > 1 else ""
+    try:
+        from app.adapters.google import GoogleTokenStore
+        store = GoogleTokenStore()
+        if not await store.has_valid_token(user_id, "google", "https://www.googleapis.com/auth/gmail.readonly"):
+            return "⚠️ Google non collegato. Vai in Impostazioni per collegare il tuo account."
+
+        from app.adapters.google.gmail_adapter import GmailReaderAdapter
+        reader = GmailReaderAdapter()
+        emails = await reader.fetch_messages(user_id, max_results=5, query=query)
+        if not emails:
+            return "📭 Nessuna email trovata" + (f" per '{query}'" if query else "")
+        lines = [f"📬 Ultime {len(emails)} email:"]
+        for e in emails:
+            lines.append(f"- **{e['subject']}** da {e['from']} — {e['snippet'][:60]}...")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Errore lettura Gmail: {e}"
+
+
+async def _import_from_drive(user_id: str, parts: list[str]) -> str:
+    """Import a file from Google Drive."""
+    query = parts[1] if len(parts) > 1 else ""
+    if not query:
+        return "Specifica il nome del file da importare da Drive"
+    try:
+        from app.adapters.google import GoogleTokenStore
+        store = GoogleTokenStore()
+        if not await store.has_valid_token(user_id, "google", "https://www.googleapis.com/auth/drive.readonly"):
+            return "⚠️ Google non collegato. Vai in Impostazioni per collegare il tuo account."
+
+        from app.adapters.google.drive_adapter import GoogleDriveAdapter
+        drive = GoogleDriveAdapter()
+        files = await drive.list_files(user_id, query=query, max_results=1)
+        if not files:
+            return f"Nessun file trovato su Drive per '{query}'"
+
+        file_info = files[0]
+        result = await drive.import_to_acg(user_id, file_info["id"])
+        return f"📁 Importato da Drive: **{result['filename']}** ({result['size_bytes']} bytes) — ora visibile in Documenti"
+    except Exception as e:
+        return f"Errore importazione Drive: {e}"
