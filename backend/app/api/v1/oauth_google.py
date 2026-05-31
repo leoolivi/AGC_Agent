@@ -49,7 +49,8 @@ def _build_flow() -> Flow:
 @router.post("/authorize")
 async def authorize(user: dict = Depends(get_current_user)) -> dict:
     """Generate Google OAuth2 authorization URL."""
-    if not settings.google_client_id:
+    from pathlib import Path
+    if not settings.google_client_id and not Path(settings.google_credentials_file).exists():
         raise HTTPException(status_code=501, detail="Google integration not configured")
 
     flow = _build_flow()
