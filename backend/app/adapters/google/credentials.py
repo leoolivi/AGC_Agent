@@ -25,12 +25,24 @@ async def get_credentials(user_id: str) -> Credentials:
     if not refresh_token:
         raise GoogleAuthExpiredError("No Google token found. User must re-authorize.")
 
+    # Load client_id/secret from JSON file or settings
+    client_id = settings.google_client_id
+    client_secret = settings.google_client_secret
+    from pathlib import Path
+    creds_file = Path(settings.google_credentials_file)
+    if creds_file.exists():
+        import json
+        data = json.loads(creds_file.read_text())
+        web = data.get("web", data.get("installed", {}))
+        client_id = web.get("client_id", client_id)
+        client_secret = web.get("client_secret", client_secret)
+
     creds = Credentials(
         token=None,
         refresh_token=refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.google_client_id,
-        client_secret=settings.google_client_secret,
+        client_id=client_id,
+        client_secret=client_secret,
     )
 
     # Refresh to get a valid access token

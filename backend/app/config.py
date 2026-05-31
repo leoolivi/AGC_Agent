@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/v1/oauth/google/callback"
     google_token_encryption_key: str = ""
     google_drive_watch_folder_id: str = ""
+    google_credentials_file: str = "infra/client_secret_google.json"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

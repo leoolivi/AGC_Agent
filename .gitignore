@@ -1,3 +1,7 @@
+# Secrets
+infra/client_secret*.json
+.env
+
 # Python
 __pycache__/
 *.py[cod]

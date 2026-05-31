@@ -25,6 +25,12 @@ _pending_states: dict[str, str] = {}
 
 
 def _build_flow() -> Flow:
+    from pathlib import Path
+    creds_file = Path(settings.google_credentials_file)
+    if creds_file.exists():
+        return Flow.from_client_secrets_file(
+            str(creds_file), scopes=SCOPES, redirect_uri=settings.google_redirect_uri
+        )
     return Flow.from_client_config(
         {
             "web": {
