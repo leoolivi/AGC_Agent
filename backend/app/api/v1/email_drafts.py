@@ -74,10 +74,17 @@ async def update_draft(
         raise HTTPException(status_code=422, detail="Can only edit drafts in pending_review")
     if body.subject is not None:
         draft.subject = body.subject
-    if body.body_html is not None:
-        draft.body_html = body.body_html
     if body.body_text is not None:
         draft.body_text = body.body_text
+        # Auto-convert markdown to HTML
+        import re
+        html = body.body_text
+        html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+        html = re.sub(r'^\- (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+        html = html.replace("\n\n", "</p><p>").replace("\n", "<br>")
+        draft.body_html = f"<p>{html}</p>"
+    if body.body_html is not None and body.body_text is None:
+        draft.body_html = body.body_html
     if body.to_addresses is not None:
         draft.to_addresses = body.to_addresses
     await db.commit()

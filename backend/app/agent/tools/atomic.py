@@ -112,12 +112,24 @@ async def _create_email_draft(user_id: str, parts: list[str]) -> str:
     if not to:
         return "Destinatario mancante per la bozza email"
 
+    # Clean up escaped newlines from LLM output
+    body = body.replace("\\n", "\n").strip()
+
+    # Convert markdown body to HTML for sending
+    import re
+    html_body = body
+    html_body = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_body)
+    html_body = re.sub(r'^\- (.+)$', r'<li>\1</li>', html_body, flags=re.MULTILINE)
+    html_body = html_body.replace("\n\n", "</p><p>").replace("\n", "<br>")
+    html_body = f"<p>{html_body}</p>"
+    html_body = html_body.replace("<p><li>", "<ul><li>").replace("</li></p>", "</li></ul>")
+
     async with await _get_session() as session:
         draft = EmailDraft(
             user_id=uuid.UUID(user_id),
-            to_addresses=[to],
+            to_addresses=[a.strip() for a in to.split(",")],
             subject=subject,
-            body_html=f"<p>{body.replace(chr(10), '<br>')}</p>",
+            body_html=html_body,
             body_text=body,
             status="pending_review",
         )
