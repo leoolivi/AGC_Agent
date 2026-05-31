@@ -84,13 +84,16 @@ class ChatAgentGraph:
                 data = json.loads(content[json_start:json_end])
                 if data.get("action"):
                     workflow_id = data["action"]
+                    args = data.get("args", {})
+                    # Auto-resolve document_id if missing
+                    args = await self._resolve_args(args, user_id)
                     # Execute workflow
                     try:
                         from app.agent.graphs.workflow_graph import WorkflowGraph
                         from app.agent.risk.engine import RiskEngine
 
                         wg = WorkflowGraph(registry=self._registry, risk_engine=RiskEngine(), llm=self._llm)
-                        result = await wg.run(workflow_id, data.get("args", {}), user_id)
+                        result = await wg.run(workflow_id, args, user_id)
                         steps = ", ".join(f"{s['tool']} ({s['status']})" for s in result["steps"])
                         return {
                             "response": f"Ho eseguito '{workflow_id}': {steps}",
@@ -108,6 +111,32 @@ class ChatAgentGraph:
             return {"response": "Non posso rispondere a questa richiesta.", "blocked": True}
 
         return {"response": content, "workflow_id": workflow_id, "blocked": False}
+
+    async def _resolve_args(self, args: dict, user_id: str) -> dict:
+        """Auto-resolve missing args from user's data. E.g. document_id from most recent doc."""
+        if "document_id" not in args:
+            try:
+                import uuid as _uuid
+                from sqlalchemy import select
+                from app.config import settings
+                from app.db.session import build_session_factory
+                from app.db.models import Document
+
+                factory = build_session_factory(settings.database_url)
+                async with factory() as session:
+                    result = await session.execute(
+                        select(Document.id)
+                        .where(Document.user_id == _uuid.UUID(user_id))
+                        .where(Document.document_type == "fattura")
+                        .order_by(Document.created_at.desc())
+                        .limit(1)
+                    )
+                    row = result.first()
+                    if row:
+                        args["document_id"] = str(row[0])
+            except Exception:
+                pass
+        return args
 
     async def _load_user_context(self, user_id: str) -> str:
         """Load user's real data from DB."""
