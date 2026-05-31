@@ -21,29 +21,33 @@ SCOPES = [
 ]
 
 # In-memory state store (production: use Redis or DB)
-_pending_states: dict[str, dict] = {}
+_pending_states: dict[str, str] = {}
 
 
 def _build_flow() -> Flow:
     from pathlib import Path
     creds_file = Path(settings.google_credentials_file)
     if creds_file.exists():
-        return Flow.from_client_secrets_file(
+        flow = Flow.from_client_secrets_file(
             str(creds_file), scopes=SCOPES, redirect_uri=settings.google_redirect_uri
         )
-    return Flow.from_client_config(
-        {
-            "web": {
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [settings.google_redirect_uri],
-            }
-        },
-        scopes=SCOPES,
-        redirect_uri=settings.google_redirect_uri,
-    )
+    else:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [settings.google_redirect_uri],
+                }
+            },
+            scopes=SCOPES,
+            redirect_uri=settings.google_redirect_uri,
+        )
+    # Disable PKCE — not needed for web apps with client_secret
+    flow.code_verifier = None
+    return flow
 
 
 @router.post("/authorize")
@@ -55,7 +59,7 @@ async def authorize(user: dict = Depends(get_current_user)) -> dict:
 
     flow = _build_flow()
     state = secrets.token_urlsafe(32)
-    _pending_states[state] = {"user_id": user["sub"], "code_verifier": flow.code_verifier}
+    _pending_states[state] = user["sub"]
 
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -69,14 +73,12 @@ async def authorize(user: dict = Depends(get_current_user)) -> dict:
 @router.get("/callback")
 async def callback(code: str, state: str) -> RedirectResponse:
     """Handle Google OAuth2 callback — exchange code for tokens."""
-    pending = _pending_states.pop(state, None)
-    if not pending:
+    user_id = _pending_states.pop(state, None)
+    if not user_id:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
-    user_id = pending["user_id"]
     flow = _build_flow()
-    flow.code_verifier = pending.get("code_verifier")
-    flow.fetch_token(code=code, code_verifier=pending.get("code_verifier"))
+    flow.fetch_token(code=code)
     credentials = flow.credentials
 
     if not credentials.refresh_token:
