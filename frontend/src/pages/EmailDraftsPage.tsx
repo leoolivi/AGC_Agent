@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/api/client";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Draft {
   id: string;
@@ -43,6 +45,7 @@ function DraftDetail({ draft, onBack }: { draft: Draft; onBack: () => void }) {
   const [to, setTo] = useState(draft.to_addresses.join(", "));
   const [body, setBody] = useState(draft.body_text);
   const [editing, setEditing] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   const updateDraft = useMutation({
     mutationFn: async () => {
@@ -93,13 +96,25 @@ function DraftDetail({ draft, onBack }: { draft: Draft; onBack: () => void }) {
                 <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Corpo</label>
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={10}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Corpo (Markdown)</label>
+                  <Button size="sm" variant="ghost" className="text-xs" onClick={() => setPreview(!preview)}>
+                    {preview ? "Editor" : "Anteprima"}
+                  </Button>
+                </div>
+                {preview ? (
+                  <div className="rounded-md border border-input bg-muted/30 p-4 text-sm prose prose-sm max-w-none min-h-[200px]">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    rows={10}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                    placeholder="Scrivi in markdown..."
+                  />
+                )}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => updateDraft.mutate()} disabled={updateDraft.isPending}>
@@ -114,8 +129,8 @@ function DraftDetail({ draft, onBack }: { draft: Draft; onBack: () => void }) {
                 <p><span className="text-muted-foreground">A:</span> {draft.to_addresses.join(", ")}</p>
                 <p><span className="text-muted-foreground">Oggetto:</span> <strong>{draft.subject}</strong></p>
               </div>
-              <div className="bg-muted/50 rounded-md p-4 text-sm whitespace-pre-wrap">
-                {draft.body_text}
+              <div className="bg-muted/50 rounded-md p-4 text-sm prose prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft.body_text}</ReactMarkdown>
               </div>
             </>
           )}
