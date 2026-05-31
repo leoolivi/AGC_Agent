@@ -27,6 +27,12 @@ ISTRUZIONI:
 - Se un dato non è presente nel contesto, dì chiaramente "non ho trovato questa informazione nel documento"
 - Se l'utente chiede un'azione, rispondi SOLO con: {{"action": "workflow_id", "args": {{...}}}}
 
+REGOLE CRITICHE PER L'ANALISI:
+- Tratta OGNI documento come entità separata. Quando riporti informazioni, specifica sempre DA QUALE documento provengono (es. "Dalla fattura X...", "Dal contratto Y...")
+- Distingui tra INFORMAZIONE (clausola, dato presente) e AZIONE NECESSARIA (scadenza reale, pagamento dovuto). Non trasformare clausole contrattuali passive in azioni da intraprendere a meno che non ci sia evidenza di un evento che le attiva
+- NON inventare scadenze. Se una data nel documento è una data di compilazione, firma o emissione, NON presentarla come scadenza. Se non sei sicuro che una data sia una scadenza reale, dì "questa data potrebbe essere una scadenza ma richiede conferma"
+- Cerca correlazioni tra documenti (stesso fornitore, stesso importo, riferimenti incrociati) e segnalale esplicitamente
+
 Workflow disponibili:
 {workflows}"""
 
@@ -136,15 +142,17 @@ class ChatAgentGraph:
 
             parts: list[str] = []
             if docs:
-                parts.append("DOCUMENTI:")
-                for d in docs:
+                parts.append("=== DOCUMENTI NEL SISTEMA ===")
+                for i, d in enumerate(docs, 1):
                     meta = d.extracted_metadata or {}
                     meta_str = ", ".join(
                         f"{k}: {v.get('value', '?')}" for k, v in meta.items()
-                        if isinstance(v, dict) and v.get("value") and str(v.get("value")) != "-"
+                        if isinstance(v, dict) and v.get("value") and str(v.get("value")) not in ("-", "", "N/D")
                     ) if meta else "nessun metadato"
-                    parts.append(f"  - {d.filename} | tipo: {d.document_type or '?'} | stato: {d.parse_status}")
-                    parts.append(f"    Metadati: {meta_str}")
+                    parts.append(f"\n--- Documento {i}: {d.filename} ---")
+                    parts.append(f"Tipo: {d.document_type or 'non classificato'} | Stato: {d.parse_status}")
+                    if meta_str:
+                        parts.append(f"Dati estratti: {meta_str}")
 
                 # Load full text of most recent documents for detailed queries
                 from app.db.models import DocumentChunk
@@ -158,9 +166,8 @@ class ChatAgentGraph:
                     chunk_texts = [row[0] for row in chunks_result.all()]
                     if chunk_texts:
                         full_text = "\n".join(chunk_texts)[:3000]
-                        parts.append(f"  CONTENUTO '{d.filename}':\n{full_text}")
+                        parts.append(f"Contenuto testuale:\n{full_text}")
                     else:
-                        # No chunks — try to read from storage and parse
                         try:
                             from app.adapters.parsers.pymupdf_parser import PyMuPDFParser
                             from app.api.deps import get_storage
@@ -169,7 +176,7 @@ class ChatAgentGraph:
                             parser = PyMuPDFParser()
                             if parser.can_parse(d.content_type, d.filename):
                                 parsed = await parser.parse(file_data, d.filename)
-                                parts.append(f"  CONTENUTO '{d.filename}':\n{parsed.text[:3000]}")
+                                parts.append(f"Contenuto testuale:\n{parsed.text[:3000]}")
                         except Exception:
                             pass
             else:

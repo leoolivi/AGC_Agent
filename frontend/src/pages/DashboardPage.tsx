@@ -2,6 +2,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useInbox, useUnreadCount, useActOnInbox, useDismissInbox } from "@/api/hooks";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/api/client";
 import type { InboxItem } from "@/api/types";
 
 type Urgency = InboxItem["urgency"];
@@ -58,6 +60,10 @@ function InboxCard({ item }: { item: InboxItem }) {
 export function DashboardPage() {
   const { data: items, isLoading, error } = useInbox("pending");
   const { data: unread } = useUnreadCount();
+  const { data: overview } = useQuery<{ deadlines: { red: number; yellow: number; green: number } }>({
+    queryKey: ["dashboard-overview"],
+    queryFn: async () => (await api.get("/api/v1/dashboard/overview")).data,
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -85,15 +91,15 @@ export function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-md bg-urgent/10 p-2">
-                <div className="text-2xl font-bold text-urgent">—</div>
+                <div className="text-2xl font-bold text-urgent">{overview?.deadlines.red ?? 0}</div>
                 <div className="text-xs text-muted-foreground">Scadute</div>
               </div>
               <div className="rounded-md bg-warning/10 p-2">
-                <div className="text-2xl font-bold text-warning">—</div>
+                <div className="text-2xl font-bold text-warning">{overview?.deadlines.yellow ?? 0}</div>
                 <div className="text-xs text-muted-foreground">7 giorni</div>
               </div>
               <div className="rounded-md bg-success/10 p-2">
-                <div className="text-2xl font-bold text-success">—</div>
+                <div className="text-2xl font-bold text-success">{overview?.deadlines.green ?? 0}</div>
                 <div className="text-xs text-muted-foreground">30 giorni</div>
               </div>
             </div>

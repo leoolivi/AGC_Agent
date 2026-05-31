@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     s3_region: str = "eu-south-1"
 
     # LLM
-    llm_provider: str = "ollama"
+    llm_provider: str = "openrouter"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     google_api_key: str = ""
