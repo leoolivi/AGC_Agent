@@ -93,7 +93,11 @@ class ChatAgentGraph:
                         from app.agent.risk.engine import RiskEngine
 
                         wg = WorkflowGraph(registry=self._registry, risk_engine=RiskEngine(), llm=self._llm)
-                        result = await wg.run(workflow_id, args, user_id)
+                        # Keep only args the template expects
+                        template = self._registry.get(workflow_id)
+                        valid_keys = set(template.required_args + template.optional_args)
+                        clean_args = {k: v for k, v in args.items() if k in valid_keys}
+                        result = await wg.run(workflow_id, clean_args, user_id)
                         steps = ", ".join(f"{s['tool']} ({s['status']})" for s in result["steps"])
                         return {
                             "response": f"Ho eseguito '{workflow_id}': {steps}",
@@ -113,8 +117,11 @@ class ChatAgentGraph:
         return {"response": content, "workflow_id": workflow_id, "blocked": False}
 
     async def _resolve_args(self, args: dict, user_id: str) -> dict:
-        """Auto-resolve missing args from user's data. E.g. document_id from most recent doc."""
+        """Auto-resolve missing args from user's data."""
+        # Normalize: LLM might use 'documents', 'filename', 'file' instead of 'document_id'
         if "document_id" not in args:
+            # Check if LLM provided a filename or list we can resolve
+            hint = args.pop("documents", args.pop("filename", args.pop("file", None)))
             try:
                 import uuid as _uuid
                 from sqlalchemy import select
@@ -124,14 +131,15 @@ class ChatAgentGraph:
 
                 factory = build_session_factory(settings.database_url)
                 async with factory() as session:
-                    result = await session.execute(
-                        select(Document.id)
-                        .where(Document.user_id == _uuid.UUID(user_id))
-                        .where(Document.document_type == "fattura")
-                        .order_by(Document.created_at.desc())
-                        .limit(1)
-                    )
-                    row = result.first()
+                    query = select(Document.id).where(Document.user_id == _uuid.UUID(user_id))
+                    if hint:
+                        # Try to match by filename
+                        search = hint[0] if isinstance(hint, list) else str(hint)
+                        query = query.where(Document.filename.ilike(f"%{search}%"))
+                    else:
+                        query = query.where(Document.document_type == "fattura")
+                    query = query.order_by(Document.created_at.desc()).limit(1)
+                    row = (await session.execute(query)).first()
                     if row:
                         args["document_id"] = str(row[0])
             except Exception:
