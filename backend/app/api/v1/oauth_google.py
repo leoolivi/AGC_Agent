@@ -21,7 +21,7 @@ SCOPES = [
 ]
 
 # In-memory state store (production: use Redis or DB)
-_pending_states: dict[str, str] = {}
+_pending_states: dict[str, dict] = {}
 
 
 def _build_flow() -> Flow:
@@ -55,7 +55,7 @@ async def authorize(user: dict = Depends(get_current_user)) -> dict:
 
     flow = _build_flow()
     state = secrets.token_urlsafe(32)
-    _pending_states[state] = user["sub"]
+    _pending_states[state] = {"user_id": user["sub"], "code_verifier": flow.code_verifier}
 
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -69,11 +69,13 @@ async def authorize(user: dict = Depends(get_current_user)) -> dict:
 @router.get("/callback")
 async def callback(code: str, state: str) -> RedirectResponse:
     """Handle Google OAuth2 callback — exchange code for tokens."""
-    user_id = _pending_states.pop(state, None)
-    if not user_id:
+    pending = _pending_states.pop(state, None)
+    if not pending:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
+    user_id = pending["user_id"]
     flow = _build_flow()
+    flow.code_verifier = pending.get("code_verifier")
     flow.fetch_token(code=code)
     credentials = flow.credentials
 
