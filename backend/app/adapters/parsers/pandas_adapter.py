@@ -25,14 +25,32 @@ class PandasAdapter(DocumentParserPort):
         buf = io.BytesIO(file)
         if filename.endswith(".csv") or "csv" in filename:
             df = pd.read_csv(buf)
+            text = df.to_string(index=False)
+            tables = [df.to_dict(orient="records")]
+            metadata: dict[str, object] = {"rows": len(df), "columns": list(df.columns)}
         else:
-            df = pd.read_excel(buf)
+            sheets = pd.read_excel(buf, sheet_name=None, engine="openpyxl")
+            parts: list[str] = []
+            tables = []
+            total_rows = 0
+            all_columns: list[str] = []
+            for sheet_name, df in sheets.items():
+                parts.append(f"--- {sheet_name} ---")
+                parts.append(df.to_string(index=False))
+                tables.append(df.to_dict(orient="records"))
+                total_rows += len(df)
+                all_columns.extend(c for c in df.columns if c not in all_columns)
+            text = "\n\n".join(parts)
+            metadata = {
+                "rows": total_rows,
+                "columns": all_columns,
+                "sheets": list(sheets.keys()),
+            }
 
-        text = df.to_string(index=False)
-        tables = [df.to_dict(orient="records")]
+        has_data = metadata["rows"] > 0 if isinstance(metadata["rows"], int) else bool(text.strip())
         return ParsedDocument(
             text=text,
             tables=tables,
-            metadata={"rows": len(df), "columns": list(df.columns)},
-            confidence=0.85 if len(df) > 0 else 0.0,
+            metadata=metadata,
+            confidence=0.85 if has_data else 0.0,
         )

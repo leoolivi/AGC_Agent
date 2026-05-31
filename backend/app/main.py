@@ -15,6 +15,7 @@ if settings.langsmith_enabled and settings.langsmith_api_key:
 
 from app.api.v1.agent import router as agent_router
 from app.api.v1.audit import router as audit_router
+from app.api.v1.chat import router as chat_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.confirmations import router as confirmations_router
 from app.api.v1.dashboard import router as dashboard_router
@@ -44,6 +45,7 @@ app.include_router(deadlines_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(email_drafts_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 
