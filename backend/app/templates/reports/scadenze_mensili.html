@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    body { font-family: sans-serif; margin: 2cm; }
+    h1 { color: #1a365d; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #edf2f7; }
+    .meta { color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>{{ title }}</h1>
+  <p class="meta">Periodo: {{ period }} | Generato: {{ generated_at }}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Titolo</th>
+        <th>Data Scadenza</th>
+        <th>Stato</th>
+        <th>Tipo</th>
+        <th>Documento Sorgente</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.deadline_title }}</td>
+        <td>{{ row.due_date }}</td>
+        <td>{{ row.status }}</td>
+        <td>{{ row.deadline_type }}</td>
+        <td>{{ row.source_document or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if summary %}
+  <h2>Riepilogo</h2>
+  <ul>
+    {% for key, value in summary.items() %}
+    <li>{{ key }}: {{ value }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</body>
+</html>

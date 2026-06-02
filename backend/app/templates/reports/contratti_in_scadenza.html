@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    body { font-family: sans-serif; margin: 2cm; }
+    h1 { color: #744210; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #fefcbf; }
+    .meta { color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>{{ title }}</h1>
+  <p class="meta">Periodo: {{ period }} | Generato: {{ generated_at }}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Contratto</th>
+        <th>Scadenza</th>
+        <th>Stato</th>
+        <th>Documento Sorgente</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% if row.deadline_type == 'contrattuale' %}
+      <tr>
+        <td>{{ row.deadline_title }}</td>
+        <td>{{ row.due_date }}</td>
+        <td>{{ row.status }}</td>
+        <td>{{ row.source_document or '—' }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
