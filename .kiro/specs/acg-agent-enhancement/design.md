@@ -497,3 +497,400 @@ The `Deadline` model gains:
 
 ---
 
+
+## Correctness Properties
+
+*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+
+### Property 1: Source configuration validation
+
+*For any* source configuration (Drive, Gmail, or Calendar), the system SHALL accept the configuration if and only if all fields are within valid ranges (polling_interval 5–1440 minutes for Drive/Gmail, lookahead_days 7–90 for Calendar), and reject configurations with out-of-range values without persisting them.
+
+**Validates: Requirements 1.2, 1.3, 1.4**
+
+### Property 2: OAuth scope sufficiency check
+
+*For any* subset of OAuth scopes granted by the user, the scope validator SHALL return "sufficient" if and only if all required scopes for the requested source type are present, and return the list of missing scopes otherwise.
+
+**Validates: Requirements 1.7**
+
+### Property 3: Ingested document source attribution
+
+*For any* file ingested from a monitored source (Drive or Gmail), the created document record SHALL have `source` set to the correct source type and `source_ref_id` set to the provider's unique identifier (file_id for Drive, message_id for Gmail).
+
+**Validates: Requirements 2.2, 2.3**
+
+### Property 4: Sync token idempotency
+
+*For any* sequence of polling cycles on the same source, a document that was successfully processed in cycle N SHALL never be re-processed in any subsequent cycle N+k (k > 0), as long as the sync token remains valid.
+
+**Validates: Requirements 2.4**
+
+### Property 5: File format filter
+
+*For any* file detected in a monitored source, the ingest pipeline SHALL process it if and only if its format is in the supported set (PDF, XLS, XLSX, CSV); unsupported formats are silently skipped.
+
+**Validates: Requirements 2.6**
+
+### Property 6: Polling batch size limit
+
+*For any* polling cycle on a single source that detects N new files, the system SHALL process at most 10 files in that cycle, enqueueing the remaining max(0, N-10) for the next cycle.
+
+**Validates: Requirements 2.7**
+
+### Property 7: Calendar event confidence threshold
+
+*For any* calendar event analyzed for administrative relevance, the system SHALL create an AgentInboxItem if and only if the confidence score is >= 0.70; events below this threshold are silently ignored.
+
+**Validates: Requirements 3.2, 3.4**
+
+### Property 8: Calendar deadline HITL gate
+
+*For any* deadline creation derived from a calendar event, a PendingConfirmation SHALL exist and be approved before the deadline is persisted in the system.
+
+**Validates: Requirements 3.3**
+
+### Property 9: Calendar event deduplication
+
+*For any* calendar event that has already been imported as a deadline (matching calendar_event_id), attempting to import it again SHALL not create a duplicate deadline but instead propose an update if the event has changed.
+
+**Validates: Requirements 3.5**
+
+### Property 10: Processing feed size limit
+
+*For any* state of the processing feed, the number of visible items SHALL not exceed 20.
+
+**Validates: Requirements 4.5**
+
+### Property 11: Risky clause structural completeness
+
+*For any* risky clause detected in a contract, the clause record SHALL contain: a valid category, non-empty clause_text, a non-null page_number, a severity level, a confidence_score, a plain_language_explanation of at most 200 characters, and verifiable source attribution (page + paragraph reference).
+
+**Validates: Requirements 5.2, 5.3, 5.5**
+
+### Property 12: Clause confidence visual threshold
+
+*For any* risky clause with a confidence_score, the system SHALL flag it as "Interpretazione incerta" if and only if confidence_score < 0.75.
+
+**Validates: Requirements 5.4**
+
+### Property 13: Clause ordering by severity
+
+*For any* list of risky clauses for a document, when presented in the panel they SHALL be grouped by category and within each category ordered by severity descending (alto > medio > basso).
+
+**Validates: Requirements 6.2**
+
+### Property 14: Correlation structural validity
+
+*For any* document correlation, it SHALL have a valid correlation_type (one of: derivato_da, versione_di, allegato_di, in_conflitto_con), a confidence_score, and non-empty source_passage and target_passage fields providing the textual evidence.
+
+**Validates: Requirements 7.2, 7.3**
+
+### Property 15: Conflict correlation creates urgent inbox item
+
+*For any* correlation of type "in_conflitto_con", the system SHALL create an AgentInboxItem with urgency="today" containing the conflict description and side-by-side passage references.
+
+**Validates: Requirements 7.4**
+
+### Property 16: Correlation confidence display threshold
+
+*For any* document correlation, it SHALL be displayed as "Correlazione certa" if confidence >= 0.85, as "Correlazione probabile" if confidence is in [0.60, 0.85), and not displayed at all if confidence < 0.60.
+
+**Validates: Requirements 7.6**
+
+### Property 17: Dossier grouping from correlations
+
+*For any* set of document correlations, documents connected by correlations (directly or transitively) SHALL be grouped into the same dossier, and the dossier's completeness status and missing_items list SHALL be updated whenever a new correlation is added.
+
+**Validates: Requirements 8.2, 8.3, 8.5**
+
+### Property 18: Escalation rule validation
+
+*For any* escalation rule, it SHALL have at most 5 steps, each step's delay_seconds SHALL be strictly greater than the previous step's delay_seconds, and each step SHALL have a valid channel (in_app, email, calendar) and non-empty recipient.
+
+**Validates: Requirements 9.2, 9.5**
+
+### Property 19: Escalation channel determines HITL requirement
+
+*For any* escalation step execution, if the channel is "in_app" then no PendingConfirmation is created (direct notification); if the channel is "email" or "calendar" then a PendingConfirmation SHALL be created and the action executed only after explicit user approval.
+
+**Validates: Requirements 10.2, 10.3, 10.4**
+
+### Property 20: User action resolves active escalation
+
+*For any* active escalation sequence, when the user performs an action on the related AgentInboxItem (confirming the deadline), the escalation SHALL transition to status="resolved" and no further steps SHALL be executed.
+
+**Validates: Requirements 10.6**
+
+### Property 21: Report filter correctness
+
+*For any* report generation request with filters (deadline_types, statuses, date range), every row in the generated report SHALL match all specified filter criteria, and no matching deadline SHALL be omitted.
+
+**Validates: Requirements 11.1**
+
+### Property 22: Report data traceability
+
+*For any* row in a generated report, it SHALL include a non-null source_document_id that references an existing document in the system.
+
+**Validates: Requirements 11.2**
+
+### Property 23: Export actions require HITL
+
+*For any* report export action (to Drive or via email), a PendingConfirmation SHALL be created and the export executed only after explicit user approval; the report data SHALL be preserved regardless of export success or failure.
+
+**Validates: Requirements 12.1, 12.3**
+
+### Property 24: Calendar event creation requires risk-3 HITL
+
+*For any* calendar event creation proposed by the agent, a PendingConfirmation with risk_level=3 SHALL be created, and the event SHALL be created on Google Calendar only after explicit user approval.
+
+**Validates: Requirements 13.2**
+
+### Property 25: Completed deadline triggers calendar event update proposal
+
+*For any* deadline with an associated calendar_event_id that transitions to status "completed" or "cancelled", the system SHALL create a PendingConfirmation proposing the update or cancellation of the linked calendar event.
+
+**Validates: Requirements 13.5**
+
+### Property 26: Already-imported source indicator
+
+*For any* file in the Quick View Drive panel or event in the Quick View Calendar panel, if a document/deadline with matching source_ref_id already exists in ACG, the item SHALL be marked as "already imported" or "tracked" respectively.
+
+**Validates: Requirements 14.4, 15.4**
+
+### Property 27: Calendar-to-deadline source attribution
+
+*For any* deadline created from a calendar event via Quick View, the deadline SHALL have source="calendar" and source_ref_id equal to the original event_id.
+
+**Validates: Requirements 15.3**
+
+### Property 28: Agent activity indicator state derivation
+
+*For any* combination of system states (sources configured/not, active processing jobs, pending inbox items), the agent activity indicator SHALL derive the correct state: "inactive" (no sources), "monitoring" (sources active, no processing), "processing" (active jobs), "needs_attention" (pending items requiring user action).
+
+**Validates: Requirements 16.3, 23.2**
+
+### Property 29: Inbox badge count accuracy
+
+*For any* set of AgentInboxItems with status="pending" and PendingConfirmations with status="pending", the inbox badge count SHALL equal their sum.
+
+**Validates: Requirements 16.6**
+
+### Property 30: Confirmation flow structural consistency
+
+*For any* PendingConfirmation regardless of action type (email, Drive upload, calendar event), it SHALL contain: action_type, a preview body, source_attribution (document/deadline reference), and the visual_style SHALL match the risk level (risk 2 = standard, risk 3 = yellow border, risk 4 = red border + double confirm).
+
+**Validates: Requirements 18.1, 18.2, 18.5**
+
+### Property 31: Error classification completeness
+
+*For any* error event in the system, it SHALL be classified into exactly one of three categories: "technical" (system failure), "missing_data" (user input needed), or "needs_human_input" (decision required), and an AuditLog entry SHALL be created.
+
+**Validates: Requirements 19.1, 19.5**
+
+### Property 32: Multi-step workflow failure recovery
+
+*For any* multi-step workflow that fails at step N, all results from steps 1 through N-1 SHALL remain persisted, and retry SHALL resume from step N without re-executing completed steps.
+
+**Validates: Requirements 19.6**
+
+### Property 33: WebSocket reconnection exponential backoff
+
+*For any* sequence of failed WebSocket reconnection attempts, the delay between attempt K and K+1 SHALL be min(2^K seconds, 30 seconds).
+
+**Validates: Requirements 21.4**
+
+### Property 34: Real-time event rate limiting
+
+*For any* burst of real-time events for the same resource type within a 1-second window, the system SHALL emit at most 1 event to the client, aggregating multiple updates into a single delivery.
+
+**Validates: Requirements 21.6**
+
+### Property 35: Source attribution universality
+
+*For any* extracted or derived datum displayed in the UI (document fields, clauses, correlations, deadlines, agent suggestions), it SHALL have a source_attribution with document_id, position reference, and confidence_score; data without verifiable source SHALL be explicitly marked as "Suggerimento agente" and excluded from reports unless user-confirmed.
+
+**Validates: Requirements 22.1, 22.4, 22.5**
+
+### Property 36: Confidence level classification
+
+*For any* confidence_score associated with a datum, the system SHALL classify it as: "Estratto" (confidence >= 0.85), "Inferito" (0.60 <= confidence < 0.85), or "Suggerito" (confidence < 0.60).
+
+**Validates: Requirements 22.2**
+
+### Property 37: Documents processed today counter
+
+*For any* set of documents with processing timestamps, the "documents processed today" counter SHALL equal the count of documents whose processing completed within the current calendar day (user's timezone).
+
+**Validates: Requirements 23.5**
+
+---
+
+## Error Handling
+
+### Error Classification Strategy
+
+All errors are classified into three categories with distinct handling:
+
+| Category | Icon | User Message | System Action |
+|----------|------|-------------|---------------|
+| **Technical** | 🔴 Gear | Non-technical description + "Il team è stato notificato" | Log to AuditLog, alert ops, offer retry if idempotent |
+| **Missing Data** | 🟡 Document | What's missing + where to find it + direct action | Log to AuditLog, suggest resolution action |
+| **Needs Human Input** | 🔵 User | Context + options + consequences | Log to AuditLog, create AgentInboxItem |
+
+### Error Handling by Component
+
+
+**Source Monitor:**
+- OAuth token expired → status="error", notification to user, "Riconnetti" action (Missing Data)
+- API rate limit → exponential backoff, retry next cycle (Technical, silent)
+- 3 consecutive failures → pause source, notify user (Technical)
+- Invalid sync token → full resync, log event (Technical, auto-recovery)
+
+**Risky Clause Detector:**
+- LLM timeout/failure → retry with fallback chain (Anthropic → OpenAI → Gemini), mark document as "needs_attention" if all fail (Technical)
+- Low confidence on entire analysis → flag document for human review (Needs Human Input)
+- Unparseable document section → skip section, note in analysis results (Technical, partial success)
+
+**Cross-Document Engine:**
+- Ambiguous correlation (multiple possible matches) → present options to user (Needs Human Input)
+- Referenced document not in system → mark as "missing" in dossier (Missing Data)
+
+**Escalation Engine:**
+- Email send failure → create warning notification, suggest "Verifica indirizzo" (Technical)
+- Calendar event creation failure → preserve deadline without event, suggest "Verifica permessi" (Technical)
+- Recipient not found → escalate to next step or notify admin (Missing Data)
+
+**Report Generator:**
+- Template rendering failure → show error with "Riprova" option (Technical)
+- Drive upload failure → preserve generated report locally, offer retry (Technical)
+- Email send failure → preserve report, show error with retry (Technical)
+
+**WebSocket Layer:**
+- Connection lost → automatic reconnection with exponential backoff (1s, 2s, 4s... max 30s)
+- Fallback to polling at 30s intervals if WebSocket unavailable
+- Banner shown after 5s of disconnection: "Connessione in corso..."
+
+### Domain Exceptions
+
+```python
+# core/exceptions.py (new exceptions for this feature)
+class SourceConfigurationError(ACGDomainError):
+    """Invalid source configuration (out of range values, missing fields)."""
+
+class InsufficientOAuthScopesError(ACGDomainError):
+    """User hasn't granted required OAuth scopes."""
+    missing_scopes: list[str]
+
+class EscalationRuleValidationError(ACGDomainError):
+    """Invalid escalation rule (too many steps, non-increasing delays)."""
+
+class DuplicateIngestionError(ACGDomainError):
+    """Attempted to ingest a document that already exists (same source_ref_id)."""
+
+class ReportGenerationError(ACGDomainError):
+    """Report template rendering or data assembly failed."""
+
+class ExternalActionFailedError(ACGDomainError):
+    """An external action (email, Drive upload, Calendar event) failed."""
+    action_type: str
+    detail: str
+    retryable: bool
+```
+
+---
+
+## Testing Strategy
+
+### Dual Testing Approach
+
+This feature uses both **unit/example-based tests** and **property-based tests** (via `hypothesis`) for comprehensive coverage.
+
+
+### Property-Based Tests (Hypothesis)
+
+Each correctness property (Properties 1–37) is implemented as a `hypothesis` property test with:
+- Minimum **100 iterations** per property
+- Tag comment referencing the design property: `# Feature: acg-agent-enhancement, Property N: <title>`
+- Custom strategies for domain objects (SourceConfig, RiskyClause, EscalationRule, etc.)
+
+**Key Hypothesis Strategies:**
+
+```python
+# tests/strategies.py
+from hypothesis import strategies as st
+
+source_configs = st.one_of(
+    st.builds(DriveSourceConfig, polling_interval_minutes=st.integers(1, 2000)),
+    st.builds(GmailSourceConfig, polling_interval_minutes=st.integers(1, 2000)),
+    st.builds(CalendarSourceConfig, lookahead_days=st.integers(1, 200)),
+)
+
+risky_clauses = st.builds(
+    RiskyClause,
+    category=st.sampled_from(CLAUSE_CATEGORIES),
+    severity=st.sampled_from(["alto", "medio", "basso"]),
+    confidence_score=st.floats(min_value=0.0, max_value=1.0),
+    plain_language_explanation=st.text(min_size=1, max_size=300),
+)
+
+escalation_rules = st.builds(
+    EscalationRule,
+    steps=st.lists(
+        st.builds(EscalationStep, delay_seconds=st.integers(60, 604800)),
+        min_size=1, max_size=7,
+    ),
+)
+
+confidence_scores = st.floats(min_value=0.0, max_value=1.0, allow_nan=False)
+```
+
+### Unit/Example-Based Tests
+
+Unit tests cover:
+- **API endpoint contracts**: Request/response schema validation for all new endpoints
+- **Integration points**: Google API adapter behavior with mocked responses
+- **Edge cases**: 3 consecutive failures triggering source pause, empty dossiers, zero-result reports
+- **Error handling**: Each error category produces correct user-facing message
+- **Onboarding flow**: Step completion and skip behavior
+
+### Integration Tests
+
+Integration tests (using test database + dummy adapters) cover:
+- Full ingest pipeline: source detection → download → DocumentPipeline → status emission
+- Escalation lifecycle: rule creation → timeout trigger → step execution → resolution
+- Report generation: filter → render → export flow
+- WebSocket event delivery: action → event emission → client receipt
+
+### Test Organization
+
+```
+backend/tests/
+├── unit/
+│   ├── test_source_config_validation.py      # Properties 1, 2
+│   ├── test_ingest_pipeline.py               # Properties 3, 4, 5, 6
+│   ├── test_calendar_relevance.py            # Properties 7, 8, 9
+│   ├── test_risky_clause_service.py          # Properties 11, 12, 13
+│   ├── test_cross_document_service.py        # Properties 14, 15, 16, 17
+│   ├── test_escalation_service.py            # Properties 18, 19, 20
+│   ├── test_report_generator.py              # Properties 21, 22
+│   ├── test_confirmation_flow.py             # Properties 23, 24, 25, 30
+│   ├── test_quick_view_service.py            # Properties 26, 27
+│   ├── test_agent_indicator.py               # Properties 28, 29, 37
+│   ├── test_error_classification.py          # Properties 31, 32
+│   ├── test_realtime_layer.py                # Properties 33, 34
+│   └── test_source_attribution.py            # Properties 35, 36
+├── integration/
+│   ├── test_ingest_flow.py
+│   ├── test_escalation_flow.py
+│   ├── test_report_export_flow.py
+│   └── test_websocket_events.py
+└── strategies.py                             # Shared Hypothesis strategies
+```
+
+### Test Configuration
+
+- Property tests: `@settings(max_examples=100, deadline=timedelta(seconds=30))`
+- All tests use dummy adapters from `adapters/dummy/` — no external services in CI
+- Integration tests use a test PostgreSQL database (via `pytest-postgresql` or Docker)
+- Frontend tests (when implemented): Vitest + React Testing Library for component behavior, Playwright for E2E

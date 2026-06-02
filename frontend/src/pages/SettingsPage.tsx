@@ -3,9 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
+import { SourcesSettings } from "@/components/settings/SourcesSettings";
+import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
+import { useState } from "react";
 
 export function SettingsPage() {
   const qc = useQueryClient();
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const { data: googleStatus } = useQuery<{ connected: boolean }>({
     queryKey: ["google-status"],
@@ -60,6 +64,16 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <SourcesSettings />
+
+      {showOnboarding ? (
+        <OnboardingFlow onComplete={() => setShowOnboarding(false)} onSkip={() => setShowOnboarding(false)} />
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setShowOnboarding(true)}>
+          Avvia onboarding guidato
+        </Button>
+      )}
     </div>
   );
 }

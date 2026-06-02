@@ -1,7 +1,8 @@
 import axios from "axios";
+import { getApiBaseUrl } from "@/lib/apiBase";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
+  baseURL: getApiBaseUrl(),
 });
 
 // Attach JWT token to every request

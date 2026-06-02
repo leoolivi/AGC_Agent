@@ -22,4 +22,6 @@ class Deadline(BaseModel):
     source_confidence: float | None = None
     source_text: str | None = None
     notified_at: list[dict] = []
+    calendar_event_id: str | None = None
+    escalation_rule_id: UUID | None = None
     created_at: datetime

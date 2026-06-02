@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -20,5 +21,7 @@ class Document(BaseModel):
     extracted_metadata: dict = {}
     tags: list[str] = []
     parse_status: str = "pending"
+    source: Literal["upload", "drive", "gmail", "calendar"] = "upload"
+    source_ref_id: str | None = None
     created_at: datetime
     archived_at: datetime | None = None

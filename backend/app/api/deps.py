@@ -98,3 +98,78 @@ def get_llm() -> LLMProviderPort:
         from app.adapters.dummy.llm import DummyLLMAdapter
 
         return DummyLLMAdapter(content='{"document_type": "altro", "confidence": 0.5}')
+
+
+def decode_ws_user(token: str) -> dict:
+    """Validate JWT from WebSocket query param."""
+    try:
+        payload = decode_access_token(token)
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalid or expired",
+        ) from e
+    if payload.get("sub") is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    return payload
+
+
+_source_monitor: object | None = None
+_report_renderer: object | None = None
+_realtime: object | None = None
+_escalation_scheduler: object | None = None
+_notifier: object | None = None
+
+
+def get_source_monitor():
+    """Get source monitor adapter (Google APIs composite or dummy for testing)."""
+    global _source_monitor
+    if _source_monitor is None:
+        # Use real Google APIs adapter in production
+        # Set USE_DUMMY_ADAPTERS=true in .env for testing without Google credentials
+        if settings.use_dummy_adapters:
+            from app.adapters.dummy.source_monitor import DummySourceMonitorAdapter
+            _source_monitor = DummySourceMonitorAdapter()
+        else:
+            from app.adapters.google.composite_source_monitor import CompositeSourceMonitorAdapter
+            _source_monitor = CompositeSourceMonitorAdapter()
+    return _source_monitor
+
+
+def get_report_renderer():
+    global _report_renderer
+    if _report_renderer is None:
+        from app.adapters.report.composite_renderer import CompositeReportRenderer
+        _report_renderer = CompositeReportRenderer()
+    return _report_renderer
+
+
+def get_realtime():
+    global _realtime
+    if _realtime is None:
+        from app.adapters.realtime.websocket_adapter import WebSocketRealtimeAdapter
+        _realtime = WebSocketRealtimeAdapter()
+    return _realtime
+
+
+def get_escalation_scheduler():
+    """Get escalation scheduler adapter (APScheduler or dummy for testing)."""
+    global _escalation_scheduler
+    if _escalation_scheduler is None:
+        if settings.use_dummy_adapters:
+            from app.adapters.dummy.escalation_scheduler import DummyEscalationSchedulerAdapter
+            _escalation_scheduler = DummyEscalationSchedulerAdapter()
+        else:
+            from app.adapters.scheduler.apscheduler_escalation_adapter import (
+                APSchedulerEscalationAdapter,
+            )
+            _escalation_scheduler = APSchedulerEscalationAdapter()
+    return _escalation_scheduler
+
+
+def get_notifier():
+    global _notifier
+    if _notifier is None:
+        from app.adapters.dummy.notifier import DummyNotifierAdapter
+        _notifier = DummyNotifierAdapter()
+    return _notifier

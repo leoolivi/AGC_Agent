@@ -5,10 +5,12 @@ import { DocumentsPage } from "@/pages/DocumentsPage";
 import { DeadlinesPage } from "@/pages/DeadlinesPage";
 import { AgentPage } from "@/pages/AgentPage";
 import { ConfirmationsPage } from "@/pages/ConfirmationsPage";
-import { EmailDraftsPage } from "@/pages/EmailDraftsPage";
-import { AuditPage } from "@/pages/AuditPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { ReportsPage } from "@/pages/ReportsPage";
+import { RelationsPage } from "@/pages/RelationsPage";
+import { SourcesSettings } from "@/components/settings/SourcesSettings";
+import { EscalationRulesSettings } from "@/components/settings/EscalationRulesSettings";
 
 function AuthGuard() {
   const token = localStorage.getItem("acg_token");
@@ -17,10 +19,7 @@ function AuthGuard() {
 }
 
 export const router = createBrowserRouter([
-  {
-    path: "/login",
-    element: <LoginPage />,
-  },
+  { path: "/login", element: <LoginPage /> },
   {
     element: <AuthGuard />,
     children: [
@@ -31,11 +30,13 @@ export const router = createBrowserRouter([
           { path: "documents", element: <DocumentsPage /> },
           { path: "documents/:id", element: <DocumentsPage /> },
           { path: "deadlines", element: <DeadlinesPage /> },
+          { path: "reports", element: <ReportsPage /> },
+          { path: "relations", element: <RelationsPage /> },
           { path: "agent", element: <AgentPage /> },
           { path: "confirmations", element: <ConfirmationsPage /> },
-          { path: "email-drafts", element: <EmailDraftsPage /> },
-          { path: "audit", element: <AuditPage /> },
           { path: "settings", element: <SettingsPage /> },
+          { path: "settings/escalation", element: <EscalationRulesSettings /> },
+          { path: "settings/sources", element: <SourcesSettings /> },
         ],
       },
     ],

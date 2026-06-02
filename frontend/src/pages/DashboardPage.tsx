@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useInbox, useUnreadCount, useActOnInbox, useDismissInbox } from "@/api/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { ProcessingFeed } from "@/components/realtime/ProcessingFeed";
 import type { InboxItem } from "@/api/types";
 
 type Urgency = InboxItem["urgency"];
@@ -103,6 +104,14 @@ export function DashboardPage() {
                 <div className="text-xs text-muted-foreground">30 giorni</div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Elaborazione documenti</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProcessingFeed />
           </CardContent>
         </Card>
       </div>

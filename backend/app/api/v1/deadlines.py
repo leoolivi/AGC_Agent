@@ -120,6 +120,67 @@ async def update_deadline(
     return {"id": str(dl.id), "status": "updated"}
 
 
+@router.post("/{deadline_id}/calendar-event")
+async def create_calendar_event(
+    deadline_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Propose calendar event creation with HITL (risk level 3)."""
+    from app.api.oauth_scopes import validate_source_oauth_scope
+    from app.core.services.confirmation_flow_service import ConfirmationFlowService
+
+    await validate_source_oauth_scope(user["sub"], "calendar")
+
+    dl = await db.get(Deadline, uuid.UUID(deadline_id))
+    if dl is None:
+        raise HTTPException(status_code=404, detail="Deadline not found")
+    require_owner(str(dl.user_id), user)
+
+    conf_service = ConfirmationFlowService(db)
+    confirmation = await conf_service.create_confirmation(
+        user_id=uuid.UUID(user["sub"]),
+        action_type="create_calendar_event",
+        description=f"Crea evento calendario per: {dl.title}",
+        preview={
+            "title": dl.title,
+            "due_date": dl.due_date.isoformat(),
+            "description": dl.description or "",
+        },
+        source_attribution={"deadline_id": str(dl.id), "deadline_title": dl.title},
+    )
+    return {"status": "pending_confirmation", "confirmation_id": str(confirmation.id)}
+
+
+@router.post("/{deadline_id}/calendar-event/update-proposal")
+async def propose_calendar_update(
+    deadline_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Propose calendar event update/cancellation when deadline status changes."""
+    from app.core.services.confirmation_flow_service import ConfirmationFlowService
+
+    dl = await db.get(Deadline, uuid.UUID(deadline_id))
+    if dl is None:
+        raise HTTPException(status_code=404, detail="Deadline not found")
+    require_owner(str(dl.user_id), user)
+
+    if not dl.calendar_event_id:
+        raise HTTPException(status_code=400, detail="No linked calendar event")
+
+    action = "delete_calendar_event" if dl.status in ("completed", "cancelled", "deleted") else "update_calendar_event"
+    conf_service = ConfirmationFlowService(db)
+    confirmation = await conf_service.create_confirmation(
+        user_id=uuid.UUID(user["sub"]),
+        action_type=action,
+        description=f"Aggiorna evento calendario per: {dl.title}",
+        preview={"calendar_event_id": dl.calendar_event_id, "new_status": dl.status},
+        source_attribution={"deadline_id": str(dl.id), "calendar_event_id": dl.calendar_event_id},
+    )
+    return {"status": "pending_confirmation", "confirmation_id": str(confirmation.id)}
+
+
 @router.delete("/{deadline_id}", status_code=status.HTTP_202_ACCEPTED)
 async def delete_deadline(
     deadline_id: str,

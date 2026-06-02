@@ -2,6 +2,7 @@
 
 -- [TODO: multi-tenancy] on every table (TD-001)
 """
+
 from __future__ import annotations
 
 import uuid
@@ -52,6 +53,8 @@ class Document(Base):
     extracted_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     parse_status: Mapped[str] = mapped_column(String(50), default="pending")
+    source: Mapped[str] = mapped_column(String(20), server_default="upload")
+    source_ref_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -92,6 +95,8 @@ class Deadline(Base):
     source_confidence: Mapped[float | None] = mapped_column(Float)
     source_text: Mapped[str | None] = mapped_column(Text)
     notified_at: Mapped[list] = mapped_column(JSONB, default=list)
+    calendar_event_id: Mapped[str | None] = mapped_column(Text)
+    escalation_rule_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("escalation_rules.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -130,7 +135,11 @@ class PendingConfirmation(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
-        Index("ix_pending_confirmations_group_id", "group_id", postgresql_where="group_id IS NOT NULL"),
+        Index(
+            "ix_pending_confirmations_group_id",
+            "group_id",
+            postgresql_where="group_id IS NOT NULL",
+        ),
     )
 
 
@@ -252,4 +261,150 @@ class UserExtractionTrust(Base):
     confirmed_without_edit: Mapped[int] = mapped_column(Integer, default=0)
     edited_extractions: Mapped[int] = mapped_column(Integer, default=0)
     # accuracy is a generated column — handled in migration raw SQL
-    last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_updated: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+# --- Agent Enhancement Tables (0004 migration) ---
+
+
+class MonitoredSource(Base):
+    __tablename__ = "monitored_sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    last_sync_token: Mapped[str | None] = mapped_column(Text)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sync_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    error_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_monitored_sources_user_id", "user_id"),)
+
+
+class RiskyClause(Base):
+    __tablename__ = "risky_clauses"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False)
+    clause_text: Mapped[str] = mapped_column(Text, nullable=False)
+    page_number: Mapped[int | None] = mapped_column(Integer)
+    paragraph_ref: Mapped[str | None] = mapped_column(Text)
+    plain_language_explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_risky_clauses_document_id", "document_id"),)
+
+
+class DocumentCorrelation(Base):
+    __tablename__ = "document_correlations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    source_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id"), nullable=False
+    )
+    target_document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id"), nullable=False
+    )
+    correlation_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    source_passage: Mapped[str | None] = mapped_column(Text)
+    target_passage: Mapped[str | None] = mapped_column(Text)
+    source_page: Mapped[int | None] = mapped_column(Integer)
+    target_page: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_document_correlations_user_id", "user_id"),
+        Index("ix_document_correlations_source_doc", "source_document_id"),
+        Index("ix_document_correlations_target_doc", "target_document_id"),
+    )
+
+
+class Dossier(Base):
+    __tablename__ = "dossiers"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    dossier_type: Mapped[str | None] = mapped_column(String(50))
+    completeness_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="incomplete"
+    )
+    missing_items: Mapped[list] = mapped_column(JSONB, server_default="'[]'")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_dossiers_user_id", "user_id"),)
+
+
+class DossierDocument(Base):
+    __tablename__ = "dossier_documents"
+
+    dossier_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("dossiers.id", ondelete="CASCADE"), primary_key=True
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id"), primary_key=True)
+    role: Mapped[str | None] = mapped_column(Text)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EscalationRule(Base):
+    __tablename__ = "escalation_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    deadline_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    steps: Mapped[list] = mapped_column(JSONB, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_escalation_rules_user_id", "user_id"),)
+
+
+class EscalationExecution(Base):
+    __tablename__ = "escalation_executions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    deadline_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("deadlines.id"), nullable=False)
+    rule_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("escalation_rules.id"), nullable=False)
+    current_step: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    next_step_job_id: Mapped[str | None] = mapped_column(Text)
+    history: Mapped[list] = mapped_column(JSONB, server_default="'[]'")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("ix_escalation_executions_deadline_id", "deadline_id"),
+        Index("ix_escalation_executions_rule_id", "rule_id"),
+    )
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    template_name: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    format: Mapped[str] = mapped_column(String(10), nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(Text)
+    export_destination: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_reports_user_id", "user_id"),)

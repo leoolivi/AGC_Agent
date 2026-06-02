@@ -51,6 +51,31 @@ class Settings(BaseSettings):
     google_drive_watch_folder_id: str = ""
     google_credentials_file: str = "../infra/client_secret_google.json"
 
+    # Source monitoring
+    source_poll_interval_minutes: int = 15
+    calendar_poll_interval_minutes: int = 30
+    source_poll_max_files: int = 10
+
+    # Escalation
+    escalation_default_delay_seconds: int = 86400
+    escalation_max_steps: int = 5
+
+    # Reports
+    report_storage_path: str = "./data/reports"
+
+    # WebSocket
+    websocket_heartbeat_seconds: int = 30
+    websocket_rate_limit_seconds: float = 1.0
+    websocket_reconnect_max_seconds: int = 30
+
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/v1/oauth/google/callback"
+
+    # Feature flags
+    use_dummy_adapters: bool = False  # Set to True for testing without Google credentials
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
