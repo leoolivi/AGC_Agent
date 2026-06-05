@@ -41,7 +41,10 @@ export function AppLayout() {
   const { data: unread } = useUnreadCount();
   const { data: confirmations } = useConfirmations();
   const handleEvent = useRealtimeStore((s) => s.handleEvent);
-  const { connectionState } = useWebSocket({ onMessage: handleEvent });
+  const { connectionState } = useWebSocket({
+    onMessage: (data) =>
+      handleEvent(data as { event_type: string; payload: Record<string, unknown> }),
+  });
   const [agentOpen, setAgentOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(PANEL_DEFAULT_WIDTH);
   const location = useLocation();
