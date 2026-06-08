@@ -25,6 +25,7 @@ from app.api.v1.correlations import router as correlations_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.deadlines import router as deadlines_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.folders import router as folders_router
 from app.api.v1.dossiers import router as dossiers_router
 from app.api.v1.email_drafts import router as email_drafts_router
 from app.api.v1.escalation_rules import router as escalation_rules_router
@@ -73,6 +74,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(documents_router, prefix="/api/v1")
+app.include_router(folders_router, prefix="/api/v1")
 app.include_router(confirmations_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(inbox_router, prefix="/api/v1")

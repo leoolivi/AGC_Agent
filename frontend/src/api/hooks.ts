@@ -7,6 +7,7 @@ import type {
   InboxItem,
   UnreadCount,
   UploadResponse,
+  Folder,
 } from "./types";
 
 // ─── Inbox ───
@@ -52,23 +53,134 @@ export function useDismissInbox() {
 
 // ─── Documents ───
 
-export function useDocuments() {
+export function useDocuments(folderId?: string | null) {
   return useQuery<DocumentItem[]>({
-    queryKey: ["documents"],
-    queryFn: async () => (await api.get<DocumentItem[]>("/api/v1/documents")).data,
+    queryKey: ["documents", folderId],
+    queryFn: async () => {
+      const params = folderId ? { folder_id: folderId } : {};
+      const res = await api.get<DocumentItem[]>("/api/v1/documents", { params });
+      return res.data;
+    },
   });
 }
 
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, folderId }: { file: File; folderId?: string | null }) => {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.post<UploadResponse>("/api/v1/documents/upload", form);
+      const url = folderId
+        ? `/api/v1/documents/upload?folder_id=${folderId}`
+        : "/api/v1/documents/upload";
+      const res = await api.post<UploadResponse>(url, form);
       return res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["documents"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+}
+
+export function useUpdateDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      docId,
+      filename,
+      folderId,
+    }: {
+      docId: string;
+      filename?: string;
+      folderId?: string | null;
+    }) => {
+      const res = await api.patch(`/api/v1/documents/${docId}`, {
+        filename,
+        folder_id: folderId === null ? "root" : folderId,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+}
+
+// ─── Folders ───
+
+export function useFolder(folderId?: string | null) {
+  return useQuery<Folder | null>({
+    queryKey: ["folder", folderId],
+    queryFn: async () => {
+      if (!folderId || folderId === "root") return null;
+      const res = await api.get<Folder>(`/api/v1/folders/${folderId}`);
+      return res.data;
+    },
+    enabled: !!folderId && folderId !== "root",
+  });
+}
+
+export function useFolders(parentId?: string | null) {
+  return useQuery<Folder[]>({
+    queryKey: ["folders", parentId],
+    queryFn: async () => {
+      const params = parentId ? { parent_id: parentId } : {};
+      const res = await api.get<Folder[]>("/api/v1/folders", { params });
+      return res.data;
+    },
+  });
+}
+
+export function useCreateFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, parentId }: { name: string; parentId: string | null }) => {
+      const res = await api.post<Folder>("/api/v1/folders", {
+        name,
+        parent_id: parentId,
+      });
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["folders", variables.parentId] });
+    },
+  });
+}
+
+export function useUpdateFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      folderId,
+      name,
+      parentId,
+    }: {
+      folderId: string;
+      name?: string;
+      parentId?: string | null;
+    }) => {
+      const res = await api.patch<Folder>(`/api/v1/folders/${folderId}`, {
+        name,
+        parent_id: parentId === null ? "root" : parentId,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["folders"] });
+    },
+  });
+}
+
+export function useDeleteFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (folderId: string) => {
+      await api.delete(`/api/v1/folders/${folderId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["folders"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
   });
 }
 

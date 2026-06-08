@@ -18,6 +18,24 @@ export interface SuggestedAction {
   workflow_id?: string | null;
 }
 
+export interface Folder {
+  id: string;
+  user_id: string;
+  name: string;
+  parent_id: string | null;
+  created_at: string;
+}
+
+export interface FolderCreate {
+  name: string;
+  parent_id: string | null;
+}
+
+export interface FolderUpdate {
+  name?: string;
+  parent_id?: string | null;
+}
+
 export interface DocumentItem {
   id: string;
   filename: string;
@@ -25,6 +43,7 @@ export interface DocumentItem {
   document_type: string | null;
   parse_status: "pending" | "parsed" | "failed";
   created_at: string | null;
+  folder_id: string | null;
 }
 
 export interface DocumentDetail extends DocumentItem {

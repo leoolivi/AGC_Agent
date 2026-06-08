@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_storage, require_owner
 from app.core.ports.storage import FileStoragePort
-from app.db.models import Document
+from app.db.models import Document, Folder
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -34,6 +34,7 @@ class DocumentResponse(BaseModel):
     document_type: str | None
     parse_status: str
     created_at: str
+    folder_id: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -43,9 +44,15 @@ class SearchRequest(BaseModel):
     document_type: str | None = None
 
 
+class DocumentUpdate(BaseModel):
+    filename: str | None = None
+    folder_id: str | None = None
+
+
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile,
+    folder_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
     storage: FileStoragePort = Depends(get_storage),
@@ -62,6 +69,18 @@ async def upload_document(
     if len(data) > MAX_SIZE:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Max 20MB")
 
+    folder_uuid = None
+    if folder_id:
+        try:
+            folder_uuid = uuid.UUID(folder_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid folder_id UUID format")
+        
+        folder = await db.get(Folder, folder_uuid)
+        if folder is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        require_owner(str(folder.user_id), user)
+
     from io import BytesIO
 
     try:
@@ -77,6 +96,7 @@ async def upload_document(
     doc = Document(
         id=uuid.UUID(meta.file_id),
         user_id=uuid.UUID(user["sub"]),
+        folder_id=folder_uuid,
         filename=meta.filename,
         original_filename=file.filename or "unnamed",
         storage_key=meta.storage_key,
@@ -92,19 +112,26 @@ async def upload_document(
     import asyncio
     asyncio.create_task(_run_pipeline(str(doc.id), data, doc.filename, user["sub"], content_type))
 
-    return {"id": str(doc.id), "filename": doc.filename, "parse_status": doc.parse_status}
+    return {"id": str(doc.id), "filename": doc.filename, "parse_status": doc.parse_status, "folder_id": str(doc.folder_id) if doc.folder_id else None}
 
 
 @router.get("")
 async def list_documents(
+    folder_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
-    result = await db.execute(
-        select(Document)
-        .where(Document.user_id == uuid.UUID(user["sub"]))
-        .order_by(Document.created_at.desc())
-    )
+    query = select(Document).where(Document.user_id == uuid.UUID(user["sub"]))
+    if folder_id == "root":
+        query = query.where(Document.folder_id == None)
+    elif folder_id is not None:
+        try:
+            folder_uuid = uuid.UUID(folder_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid folder_id UUID format")
+        query = query.where(Document.folder_id == folder_uuid)
+        
+    result = await db.execute(query.order_by(Document.created_at.desc()))
     docs = result.scalars().all()
     return [
         {
@@ -114,6 +141,7 @@ async def list_documents(
             "document_type": d.document_type,
             "parse_status": d.parse_status,
             "created_at": d.created_at.isoformat() if d.created_at else None,
+            "folder_id": str(d.folder_id) if d.folder_id else None,
         }
         for d in docs
     ]
@@ -141,6 +169,46 @@ async def get_document(
         "tags": doc.tags,
         "parse_status": doc.parse_status,
         "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        "folder_id": str(doc.folder_id) if doc.folder_id else None,
+    }
+
+
+@router.patch("/{doc_id}")
+async def update_document(
+    doc_id: str,
+    body: DocumentUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    doc = await db.get(Document, uuid.UUID(doc_id))
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    require_owner(str(doc.user_id), user)
+
+    if body.filename is not None:
+        doc.filename = body.filename
+
+    if body.folder_id is not None:
+        if body.folder_id == "root":
+            doc.folder_id = None
+        else:
+            try:
+                folder_uuid = uuid.UUID(body.folder_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid folder_id UUID format")
+            folder = await db.get(Folder, folder_uuid)
+            if folder is None:
+                raise HTTPException(status_code=404, detail="Target folder not found")
+            require_owner(str(folder.user_id), user)
+            doc.folder_id = folder_uuid
+
+    await db.commit()
+    await db.refresh(doc)
+    return {
+        "id": str(doc.id),
+        "filename": doc.filename,
+        "folder_id": str(doc.folder_id) if doc.folder_id else None,
+        "parse_status": doc.parse_status,
     }
 
 
