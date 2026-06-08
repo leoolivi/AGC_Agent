@@ -24,13 +24,13 @@ const navItems = [
   { to: "/agent", icon: Bot, label: "Agent" },
   { to: "/documents", icon: FileText, label: "Documenti" },
   { to: "/deadlines", icon: CalendarClock, label: "Scadenze" },
-  { to: "/reports", icon: BarChart3, label: "Report" },
-  { to: "/relations", icon: Network, label: "Relazioni" },
+  /* { to: "/reports", icon: BarChart3, label: "Report" }, */
+  /* { to: "/relations", icon: Network, label: "Relazioni" }, */
 ];
 
 const settingsItems = [
   { to: "/settings", label: "Sorgenti e account" },
-  { to: "/settings/escalation", label: "Regole Escalation" },
+  /* { to: "/settings/escalation", label: "Regole Escalation" }, */
 ];
 
 const PANEL_MIN_WIDTH = 280;
