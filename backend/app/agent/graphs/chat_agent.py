@@ -21,6 +21,7 @@ from app.db.session import build_session_factory
 logger = structlog.get_logger()
 
 SYSTEM_PROMPT = """Sei ACG, l'assistente amministrativo dell'azienda. L'utente è il proprietario/amministratore.
+Data e ora corrente: {current_time}
 
 COMPORTAMENTO:
 - Rispondi in italiano, conciso e professionale, usa markdown
@@ -45,17 +46,21 @@ class ChatAgentGraph:
 
     async def handle_message(self, message: str, user_id: str, session_id: str) -> dict:
         """Process message → context → LLM → extract & execute tools → response."""
+        from datetime import datetime
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         # 1. Guardrail
         check = self._guardrails.check_input(message)
         if not check.allowed:
             return {"response": check.reason, "blocked": True}
 
-        # 2. Build context
+        # 2. Build context and history
         context = await self._build_context(user_id)
+        history = await self._build_history(session_id)
 
         # 3. LLM call
-        system = SYSTEM_PROMPT.format(tools=TOOL_DEFINITIONS)
-        user_prompt = f"{context}\n\n---\nUTENTE: {message}"
+        system = SYSTEM_PROMPT.format(tools=TOOL_DEFINITIONS, current_time=now)
+        user_prompt = f"{context}\n\n---\n{history}UTENTE: {message}"
 
         try:
             resp = await self._llm.generate(user_prompt, system=system)
@@ -87,6 +92,37 @@ class ChatAgentGraph:
             return {"response": "Non posso rispondere a questa richiesta.", "blocked": True}
 
         return {"response": response_text, "workflow_id": None, "blocked": False}
+
+    async def _build_history(self, session_id: str) -> str:
+        """Fetch last 10 messages to provide session memory."""
+        try:
+            from app.db.models import ChatMessage
+            factory = build_session_factory(settings.database_url)
+            sid = _uuid.UUID(session_id)
+
+            async with factory() as session:
+                # Fetch last 10 messages, ordered by creation (to keep sequence)
+                result = await session.execute(
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == sid)
+                    .order_by(ChatMessage.created_at.desc())
+                    .limit(10)
+                )
+                # Reverse to get chronological order
+                msgs = list(reversed(result.scalars().all()))
+            
+            if not msgs:
+                return ""
+
+            lines = ["## CRONOLOGIA RECENTE\n"]
+            for m in msgs:
+                role = "UTENTE" if m.role == "user" else "ACG"
+                lines.append(f"{role}: {m.content}")
+            
+            return "\n".join(lines) + "\n\n---\n"
+        except Exception as e:
+            logger.warning("history_build_failed", error=str(e))
+            return ""
 
     async def _build_context(self, user_id: str) -> str:
         """Build compact structured context with priority for Google Drive files."""
