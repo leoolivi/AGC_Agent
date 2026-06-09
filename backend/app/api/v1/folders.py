@@ -28,11 +28,11 @@ class FolderUpdate(BaseModel):
 
 
 class FolderResponse(BaseModel):
-    id: str
-    user_id: str
+    id: uuid.UUID
+    user_id: uuid.UUID
     name: str
-    parent_id: str | None
-    created_at: str
+    parent_id: uuid.UUID | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -102,7 +102,7 @@ async def list_folders(
     parent_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
-) -> list[Folder]:
+) -> list[FolderResponse]:
     user_uuid = uuid.UUID(user["sub"])
     
     query = select(Folder).where(Folder.user_id == user_uuid)

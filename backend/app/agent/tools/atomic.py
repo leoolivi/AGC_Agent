@@ -53,6 +53,8 @@ STRUMENTI DISPONIBILI (usa ESATTAMENTE questo formato, uno per riga):
    Effetto: importa un file da Google Drive nel sistema (richiede Google collegato)
    Esempio: TOOL: importa_da_drive | contratto 2026
 
+7. TOOL: data_e_ora
+
 REGOLE:
 - Puoi usare PIÙ tool nella stessa risposta (uno per riga)
 - Rispondi PRIMA all'utente in modo conversazionale, POI aggiungi i TOOL: alla fine
@@ -82,6 +84,8 @@ async def execute_tool(tool_line: str, user_id: str) -> str | None:
             return await _read_gmail(user_id, parts)
         elif tool_name == "importa_da_drive":
             return await _import_from_drive(user_id, parts)
+        elif tool_name == "data_e_ora":
+            return await _get_datetime()
         else:
             return f"Tool sconosciuto: {tool_name}"
     except Exception as e:
@@ -252,3 +256,7 @@ async def _import_from_drive(user_id: str, parts: list[str]) -> str:
         return f"📁 Importato da Drive: **{result['filename']}** ({result['size_bytes']} bytes) — ora visibile in Documenti"
     except Exception as e:
         return f"Errore importazione Drive: {e}"
+
+async def _get_datetime() -> str:
+    currDate = datetime.now()
+    return currDate.strftime("Today is %B %d %Y, it's %X")

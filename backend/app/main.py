@@ -31,6 +31,7 @@ from app.api.v1.email_drafts import router as email_drafts_router
 from app.api.v1.escalation_rules import router as escalation_rules_router
 from app.api.v1.escalation_rules import status_router as escalation_status_router
 from app.api.v1.events import router as events_router
+from app.api.v1.google_drive import router as google_drive_router
 from app.api.v1.inbox import router as inbox_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.oauth_google import router as oauth_google_router
@@ -86,6 +87,7 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(oauth_google_router, prefix="/api/v1")
+app.include_router(google_drive_router, prefix="/api/v1")
 app.include_router(sources_router, prefix="/api/v1")
 app.include_router(clauses_router, prefix="/api/v1")
 app.include_router(correlations_router, prefix="/api/v1")

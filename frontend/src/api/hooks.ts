@@ -212,3 +212,49 @@ export function useRejectConfirmation() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["confirmations"] }),
   });
 }
+
+// ─── Google Drive & Sources ───
+
+import type { DriveFile, MonitoredSource } from "./types";
+
+export function useDriveFolders(parentId: string = "root") {
+  return useQuery<DriveFile[]>({
+    queryKey: ["drive", "folders", parentId],
+    queryFn: async () => (await api.get<DriveFile[]>(`/api/v1/google/drive/folders`, { params: { parent_id: parentId } })).data,
+  });
+}
+
+export function useDriveFiles(folderId: string) {
+  return useQuery<DriveFile[]>({
+    queryKey: ["drive", "files", folderId],
+    queryFn: async () => (await api.get<DriveFile[]>(`/api/v1/google/drive/files`, { params: { folder_id: folderId } })).data,
+    enabled: !!folderId,
+  });
+}
+
+export function useSources() {
+  return useQuery<MonitoredSource[]>({
+    queryKey: ["sources"],
+    queryFn: async () => (await api.get<MonitoredSource[]>("/api/v1/sources")).data,
+  });
+}
+
+export function useCreateSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sourceType, config }: { sourceType: string; config: any }) => {
+      await api.post("/api/v1/sources", { source_type: sourceType, config });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
+  });
+}
+
+export function useDeleteSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/v1/sources/${id}`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
+  });
+}

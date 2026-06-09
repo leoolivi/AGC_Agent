@@ -84,6 +84,19 @@ export interface UploadResponse {
   parse_status: string;
 }
 
-export interface UnreadCount {
-  unread_count: number;
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime?: string;
+}
+
+export interface MonitoredSource {
+  id: string;
+  source_type: "drive" | "gmail" | "calendar";
+  config: Record<string, any>;
+  status: "active" | "error" | "paused";
+  last_sync_at: string | null;
+  last_sync_count: number;
 }

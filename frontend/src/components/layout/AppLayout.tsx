@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   MessageSquare,
+  ListChecks,
 } from "lucide-react";
 import { useUnreadCount, useConfirmations } from "@/api/hooks";
 import { useAuthStore } from "@/store/auth";
@@ -24,6 +25,7 @@ const navItems = [
   { to: "/agent", icon: Bot, label: "Agent" },
   { to: "/documents", icon: FileText, label: "Documenti" },
   { to: "/deadlines", icon: CalendarClock, label: "Scadenze" },
+  { to: "/confirmations", icon: ListChecks, label: "Conferme" },
   /* { to: "/reports", icon: BarChart3, label: "Report" }, */
   /* { to: "/relations", icon: Network, label: "Relazioni" }, */
 ];

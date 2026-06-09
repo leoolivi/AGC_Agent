@@ -20,9 +20,10 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  FolderOpen
+  FolderOpen,
+  Cloud
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,9 +35,13 @@ import {
   useCreateFolder,
   useUpdateFolder,
   useDeleteFolder,
-  useUpdateDocument
+  useUpdateDocument,
+  useDriveFolders,
+  useSources,
+  useCreateSource,
+  useDeleteSource
 } from "@/api/hooks";
-import type { DocumentItem, Folder } from "@/api/types";
+import type { DocumentItem, Folder, DriveFile, MonitoredSource } from "@/api/types";
 
 interface UploadState {
   id: string;
@@ -104,6 +109,8 @@ export function DocumentsPage() {
   const [renameItem, setRenameItem] = useState<{ id: string; name: string; type: "folder" | "file" } | null>(null);
   const [moveItem, setMoveItem] = useState<{ id: string; name: string; type: "folder" | "file"; parentId: string | null } | null>(null);
   
+  const [showDriveManager, setShowDriveManager] = useState(false);
+
   // Custom upload manager queue
   const [uploadQueue, setUploadQueue] = useState<UploadState[]>([]);
   const [isUploadManagerExpanded, setIsUploadManagerExpanded] = useState(true);
@@ -349,6 +356,14 @@ export function DocumentsPage() {
             {viewMode === "grid" ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
           </Button>
           <Button
+            variant="outline"
+            onClick={() => setShowDriveManager(!showDriveManager)}
+            className={`gap-2 border-border/60 hover:bg-muted/50 ${showDriveManager ? 'bg-primary/10 border-primary/30' : ''}`}
+          >
+            <Cloud className="h-4 w-4" />
+            <span>Google Drive</span>
+          </Button>
+          <Button
             onClick={() => setShowCreateFolder(true)}
             variant="outline"
             className="gap-2 border-border/60 hover:bg-muted/50 flex-shrink-0"
@@ -374,6 +389,8 @@ export function DocumentsPage() {
           />
         </div>
       </div>
+
+      {showDriveManager && <GoogleDriveSection />}
 
       {/* Main Explorer Area */}
       {isLoadingFolder || isLoadingFolders || isLoadingDocs ? (
@@ -894,3 +911,84 @@ const statusBadge: Record<string, string> = {
   pending: "bg-warning/10 text-warning border border-warning/20",
   failed: "bg-destructive/10 text-destructive border border-destructive/20"
 };
+
+function GoogleDriveSection() {
+  const [currentDriveFolderId, setCurrentDriveFolderId] = useState("root");
+  const { data: driveFolders, isLoading: isLoadingDrive } = useDriveFolders(currentDriveFolderId);
+  const { data: sources } = useSources();
+  const createSource = useCreateSource();
+  const deleteSource = useDeleteSource();
+
+  const isMonitored = (folderId: string) => 
+    sources?.some(s => s.source_type === "drive" && s.config.folder_id === folderId);
+
+  return (
+    <Card className="border-primary/20 bg-primary/5 mb-6">
+      <CardHeader className="py-3 px-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Cloud className="h-4 w-4 text-primary" />
+            Google Drive Explorer
+          </CardTitle>
+          <div className="flex items-center gap-2">
+             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setCurrentDriveFolderId("root")}>
+               Root
+             </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="px-4 pb-4">
+        {isLoadingDrive ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-primary/40" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {driveFolders?.map((folder) => {
+              const monitored = isMonitored(folder.id);
+              const source = sources?.find(s => s.source_type === "drive" && s.config.folder_id === folder.id);
+              
+              return (
+                <div key={folder.id} className="flex items-center justify-between p-2 rounded-md border bg-card/50 text-xs">
+                  <div 
+                    className="flex items-center gap-2 cursor-pointer truncate flex-1 mr-2" 
+                    onClick={() => setCurrentDriveFolderId(folder.id)}
+                  >
+                    <FolderIcon className="h-3.5 w-3.5 text-blue-500 fill-blue-500/20" />
+                    <span className="truncate" title={folder.name}>{folder.name}</span>
+                  </div>
+                  {monitored ? (
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => deleteSource.mutate(source!.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => createSource.mutate({ 
+                        sourceType: "drive", 
+                        config: { folder_id: folder.id, folder_name: folder.name } 
+                      })}
+                    >
+                      Importa
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+            {driveFolders?.length === 0 && (
+              <p className="text-center py-4 text-muted-foreground text-xs col-span-full">
+                Nessuna cartella trovata in questa posizione.
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

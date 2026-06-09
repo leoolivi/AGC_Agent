@@ -89,16 +89,25 @@ class ChatAgentGraph:
         return {"response": response_text, "workflow_id": None, "blocked": False}
 
     async def _build_context(self, user_id: str) -> str:
-        """Build compact structured context."""
+        """Build compact structured context with priority for Google Drive files."""
         try:
             factory = build_session_factory(settings.database_url)
             uid = _uuid.UUID(user_id)
 
             async with factory() as session:
-                docs = (await session.execute(
-                    select(Document).where(Document.user_id == uid)
-                    .order_by(Document.created_at.desc()).limit(10)
+                # 1. Fetch Google Drive documents (up to 7)
+                drive_docs = (await session.execute(
+                    select(Document).where(Document.user_id == uid, Document.source == "drive")
+                    .order_by(Document.created_at.desc()).limit(7)
                 )).scalars().all()
+
+                # 2. Fetch other recent documents
+                other_docs = (await session.execute(
+                    select(Document).where(Document.user_id == uid, Document.source != "drive")
+                    .order_by(Document.created_at.desc()).limit(10 - len(drive_docs))
+                )).scalars().all()
+
+                docs = list(drive_docs) + list(other_docs)
 
                 deadlines = (await session.execute(
                     select(Deadline).where(Deadline.user_id == uid, Deadline.status == "active")
@@ -114,27 +123,28 @@ class ChatAgentGraph:
 
             # Documents
             if docs:
-                sections.append("## DOCUMENTI")
+                sections.append("## DOCUMENTI (Priorità: Google Drive)")
                 for d in docs:
                     meta = d.extracted_metadata or {}
                     fields = {k: v.get("value") for k, v in meta.items()
                               if isinstance(v, dict) and v.get("value")
                               and str(v.get("value")) not in ("-", "", "N/D", "None")}
-                    sections.append(f"\n### {d.filename} (tipo: {d.document_type or '?'}, stato: {d.parse_status})")
+                    source_label = "[GOOGLE DRIVE]" if d.source == "drive" else "[CARICATO]"
+                    sections.append(f"\n### {source_label} {d.filename} (tipo: {d.document_type or '?'}, stato: {d.parse_status})")
                     if fields:
                         for k, v in fields.items():
                             sections.append(f"- {k}: {v}")
 
-                # Full text top 3
+                # Full text top 4 (prioritizing drive)
                 async with factory() as session:
-                    for d in docs[:3]:
+                    for d in docs[:4]:
                         chunks = (await session.execute(
                             select(DocumentChunk.content)
                             .where(DocumentChunk.document_id == d.id)
                             .order_by(DocumentChunk.chunk_index).limit(4)
                         )).all()
                         if chunks:
-                            sections.append(f"\nTesto {d.filename}:\n" + "\n".join(r[0] for r in chunks)[:2500])
+                            sections.append(f"\nTesto {d.filename}:\n" + "\n".join(r[0] for r in chunks)[:3000])
                         else:
                             try:
                                 from app.adapters.parsers.pymupdf_parser import PyMuPDFParser
@@ -144,7 +154,7 @@ class ChatAgentGraph:
                                 parser = PyMuPDFParser()
                                 if parser.can_parse(d.content_type, d.filename):
                                     parsed = await parser.parse(data, d.filename)
-                                    sections.append(f"\nTesto {d.filename}:\n{parsed.text[:2500]}")
+                                    sections.append(f"\nTesto {d.filename}:\n{parsed.text[:3000]}")
                             except Exception:
                                 pass
 

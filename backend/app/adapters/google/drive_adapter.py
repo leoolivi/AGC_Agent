@@ -15,7 +15,14 @@ logger = structlog.get_logger()
 class GoogleDriveAdapter:
     """Import files from Google Drive."""
 
-    async def list_files(self, user_id: str, folder_id: str = "", query: str = "", max_results: int = 20) -> list[dict]:
+    async def list_files(
+        self, 
+        user_id: str, 
+        folder_id: str = "", 
+        query: str = "", 
+        mime_type: str = "",
+        max_results: int = 20
+    ) -> list[dict]:
         try:
             creds = await get_credentials(user_id)
             service = build("drive", "v3", credentials=creds)
@@ -25,6 +32,9 @@ class GoogleDriveAdapter:
                 q_parts.append(f"'{folder_id}' in parents")
             if query:
                 q_parts.append(f"name contains '{query}'")
+            if mime_type:
+                q_parts.append(f"mimeType = '{mime_type}'")
+            
             q = " and ".join(q_parts)
 
             result = service.files().list(
@@ -33,7 +43,7 @@ class GoogleDriveAdapter:
             ).execute()
             return result.get("files", [])
         except Exception as e:
-            logger.error("drive_list_failed", error=str(e))
+            logger.error("drive_list_failed", error=str(e), q=q if 'q' in locals() else None)
             return []
 
     async def download_file(self, user_id: str, file_id: str) -> tuple[bytes, str, str]:
