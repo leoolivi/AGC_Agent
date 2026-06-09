@@ -1,4 +1,4 @@
-"""Chat sessions API — CRUD for persistent chat conversations."""
+"i""Chat sessions API — CRUD for persistent chat conversations."""
 from __future__ import annotations
 
 import uuid
